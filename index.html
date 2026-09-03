@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="삼우기업주식회사 안전보건 순회점검 현장등록 시스템. 현장에서 점검 내용을 즉시 등록하고 관련 법조항과 개선 조치를 확인합니다.">
+<meta name="theme-color" content="#003675">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>안전보건 순회점검 시스템</title>
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문 바로가기</a>
+
+<div class="gov-bar">
+  <div class="wrap gov-bar__inner">
+    <span class="gov-bar__org">삼우기업주식회사</span>
+    <span class="gov-bar__meta">안전보건관리팀</span>
+  </div>
+</div>
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6l7-3z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </span>
+      <span class="brand__text">
+        <strong class="brand__title">안전보건 순회점검 시스템</strong>
+        <span class="brand__sub">Safety Inspection Management</span>
+      </span>
+    </div>
+    <p class="site-header__note">산업안전보건법에 따른 사업장 순회점검 결과를 현장에서 등록·관리합니다.</p>
+    <p class="conn" id="connState" role="status" hidden>
+      <span class="conn__dot" aria-hidden="true"></span><span id="connText">저장소 확인 중</span>
+    </p>
+  </div>
+</header>
+
+<main id="main" class="wrap layout">
+
+  <!-- 좌: 등록 폼 -->
+  <section class="panel" aria-labelledby="h-form">
+    <div class="panel__head">
+      <h2 class="panel__title" id="h-form">현장 점검 등록</h2>
+      <span class="panel__hint"><span class="req">*</span> 표시는 필수 입력 항목입니다.</span>
+    </div>
+
+    <form class="panel__body form" id="inspectionForm" novalidate>
+      <div class="field-row">
+        <div class="field">
+          <label for="inspectDate">점검일자 <span class="req" aria-hidden="true">*</span></label>
+          <input type="date" id="inspectDate" name="inspectDate" required>
+        </div>
+        <div class="field">
+          <label for="inspector">점검 담당자 <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="inspector" name="inspector" placeholder="예) 최필재 부장" autocomplete="off" required>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="attendees">입회자 <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="attendees" name="attendees" placeholder="예) 생산팀장" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="location">점검 장소 <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="location" name="location" placeholder="예) 제1공장 프레스 2호기" autocomplete="off" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="category">위험 유형 <span class="req" aria-hidden="true">*</span></label>
+        <div class="select-wrap">
+          <select id="category" name="category" required>
+            <option value="">위험 유형을 선택하세요</option>
+            <option value="machine">기계·기구 위험 방지 (끼임·협착)</option>
+            <option value="fall">추락 및 전도 재해 예방</option>
+            <option value="electric">전기 설비 안전</option>
+            <option value="chemical">유해화학물질 및 보호구</option>
+            <option value="fire">화재 및 폭발 예방</option>
+            <option value="etc">기타 안전보건 사항</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="issue">현장 지적사항 <span class="req" aria-hidden="true">*</span></label>
+        <textarea id="issue" name="issue" rows="4" placeholder="예) 프레스 광전자식 방호장치가 해제된 상태로 작업 중" required></textarea>
+      </div>
+
+      <div class="field">
+        <span class="field__label">현장 사진</span>
+        <div class="file-drop">
+          <input type="file" id="photoInput" accept="image/*" capture="environment" aria-describedby="photoHelp">
+          <span class="file-drop__body">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8.5A2 2 0 0 1 5 6.5h2.2l1.1-1.7A1.5 1.5 0 0 1 9.6 4h4.8a1.5 1.5 0 0 1 1.3.8l1.1 1.7H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <circle cx="12" cy="12.5" r="3.2"/>
+            </svg>
+            <span><strong>사진 촬영</strong> 또는 파일 선택</span>
+          </span>
+        </div>
+        <p class="help" id="photoHelp">모바일에서는 후면 카메라가 바로 실행됩니다. 저장 시 자동으로 압축됩니다.</p>
+        <figure class="preview" id="previewBox" hidden>
+          <img id="imgPreview" alt="첨부한 현장 사진 미리보기">
+          <button type="button" class="btn btn--ghost btn--sm" id="removePhoto">사진 삭제</button>
+        </figure>
+      </div>
+
+      <div class="confirm">
+        <input type="checkbox" id="completeCheck">
+        <label for="completeCheck">위 내용을 확인하였으며 점검대장에 등록합니다.</label>
+      </div>
+
+      <p class="form__error" id="formError" role="alert" hidden></p>
+
+      <div class="btn-row">
+        <button type="submit" class="btn btn--primary" id="submitBtn">점검 결과 등록</button>
+        <button type="button" class="btn btn--line" id="sampleBtn">예시 불러오기</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- 우: 결과 + 이력 -->
+  <div class="stack">
+
+    <section class="panel" aria-labelledby="h-result">
+      <div class="panel__head">
+        <h2 class="panel__title" id="h-result">점검 결과 분석</h2>
+        <button type="button" class="btn btn--line btn--sm" id="printResult">인쇄</button>
+      </div>
+      <div class="panel__body" id="resultArea" aria-live="polite">
+        <p class="empty">점검 내용을 등록하면 관련 법조항과 개선 조치 가이드가 표시됩니다.</p>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-history">
+      <div class="panel__head">
+        <h2 class="panel__title" id="h-history">점검 이력 대장</h2>
+        <span class="head-actions">
+          <button type="button" class="btn btn--line btn--sm" id="refreshBtn" hidden>새로고침</button>
+          <button type="button" class="btn btn--line btn--sm" id="printHistory">인쇄</button>
+        </span>
+      </div>
+
+      <div class="panel__body">
+        <dl class="stats" id="statBar">
+          <div class="stat"><dt>총 등록</dt><dd id="statTotal">0</dd></div>
+          <div class="stat stat--done"><dt>조치완료</dt><dd id="statDone">0</dd></div>
+          <div class="stat stat--doing"><dt>진행중</dt><dd id="statDoing">0</dd></div>
+          <div class="stat stat--hold"><dt>보류</dt><dd id="statHold">0</dd></div>
+        </dl>
+
+        <div class="tabs" role="tablist" aria-label="점검 이력 기간 선택">
+          <button type="button" class="tab is-active" id="tabCurrent" role="tab" aria-selected="true" aria-controls="panelCurrent">당월 점검</button>
+          <button type="button" class="tab" id="tabPast" role="tab" aria-selected="false" aria-controls="panelPast">과거 이력</button>
+        </div>
+
+        <div id="panelCurrent" role="tabpanel" aria-labelledby="tabCurrent">
+          <p class="scroll-hint">표를 좌우로 밀어 전체 항목을 확인하세요.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <caption class="sr-only">당월 안전보건 순회점검 이력</caption>
+              <thead>
+                <tr>
+                  <th scope="col">점검일 / 장소</th>
+                  <th scope="col">담당 / 입회</th>
+                  <th scope="col">위험유형</th>
+                  <th scope="col">관련 법조항</th>
+                  <th scope="col">조치상태</th>
+                  <th scope="col">조치내용</th>
+                  <th scope="col" class="col-manage">관리</th>
+                </tr>
+              </thead>
+              <tbody id="currentBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="panelPast" role="tabpanel" aria-labelledby="tabPast" hidden>
+          <div class="filter-row">
+            <label class="sr-only" for="monthFilter">조회 월 선택</label>
+            <div class="select-wrap">
+              <select id="monthFilter">
+                <option value="all">전체 기간</option>
+              </select>
+            </div>
+          </div>
+          <p class="scroll-hint">표를 좌우로 밀어 전체 항목을 확인하세요.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <caption class="sr-only">과거 안전보건 순회점검 이력</caption>
+              <thead>
+                <tr>
+                  <th scope="col">점검일 / 장소</th>
+                  <th scope="col">담당 / 입회</th>
+                  <th scope="col">위험유형</th>
+                  <th scope="col">관련 법조항</th>
+                  <th scope="col">조치상태</th>
+                  <th scope="col">조치내용</th>
+                  <th scope="col" class="col-manage">관리</th>
+                </tr>
+              </thead>
+              <tbody id="pastBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="site-footer__org">삼우기업주식회사 안전보건관리팀</p>
+    <p class="site-footer__note">점검 기록은 사내 공유 서버에 저장됩니다. 서버에 연결되지 않은 경우 해당 기기에만 임시 저장되며, 상단 안내 문구에서 현재 저장 위치를 확인할 수 있습니다.</p>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

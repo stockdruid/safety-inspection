@@ -1,0 +1,15 @@
+{
+  "name": "safety-inspection",
+  "version": "1.0.0",
+  "description": "안전보건 순회점검 현장등록 시스템 (의존성 없는 정적 프론트엔드 + 파일 기반 Node 백엔드)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "start:lan": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

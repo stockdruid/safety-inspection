@@ -1,0 +1,10 @@
+# 실제 점검 기록과 현장 사진은 저장소에 올리지 않는다
+data/
+
+# 로컬 개발 설정 / 임시 파일
+.claude/
+node_modules/
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
