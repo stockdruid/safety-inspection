@@ -8,6 +8,9 @@
     "start": "node server.mjs",
     "start:lan": "node server.mjs"
   },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  },
   "engines": {
     "node": ">=18"
   },

@@ -164,6 +164,13 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  /** 이력 표에 들어갈 짧은 법조항 표기를 만든다. "…규칙 제619조" -> "제619조" */
+  function shortenLaw(law) {
+    var article = /제\s*\d+조(\s*의\s*\d+)?/.exec(law || '');
+    if (article) return article[0].replace(/\s+/g, '');
+    return String(law || '').slice(0, 20);
+  }
+
   function makeId() {
     return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
@@ -409,7 +416,7 @@
       key: 'c-' + makeId(),
       label: category.label,
       law: category.law || '산업안전보건법 제5조 (사업주의 일반적 의무)',
-      lawShort: category.law ? category.law.split(' ').slice(0, 2).join(' ') : '산안법 제5조',
+      lawShort: category.law ? shortenLaw(category.law) : '산안법 제5조',
       summary: category.summary || '',
       guide: category.guide || []
     };
@@ -854,12 +861,14 @@
 
     store.add(payload)
       .then(function (saved) {
-        // 로컬 모드에서는 클라이언트가 직접 목록을 쌓는다. (서버 모드는 서버가 처리)
+        // 방금 입력한 담당자·입회자·장소를 다음 점검에서 바로 고를 수 있게 목록을 갱신한다.
         if (store.mode === 'local') {
           store.addOption('inspectors', saved.inspector);
           store.addOption('attendees', saved.attendees);
           store.addOption('locations', saved.location);
           renderOptions();
+        } else {
+          store.loadOptions().then(renderOptions).catch(function (err) { console.error(err); });
         }
         renderResult(saved);
         switchTab(saved.date.slice(0, 7) === currentMonth() ? 'current' : 'past');

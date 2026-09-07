@@ -164,6 +164,13 @@ async function writeOptions(next) {
   await rename(tmp, OPTIONS_FILE);
 }
 
+/** 이력 표에 들어갈 짧은 법조항 표기를 만든다. "…규칙 제619조" -> "제619조" */
+function shortenLaw(law) {
+  const article = /제\s*\d+조(\s*의\s*\d+)?/.exec(law || '');
+  if (article) return article[0].replace(/\s+/g, '');
+  return String(law || '').slice(0, 20);
+}
+
 function findCategory(key) {
   return options.categories.find((c) => c.key === key) || null;
 }
@@ -216,7 +223,7 @@ async function handleOptions(req, res, urlPath) {
         key: 'c-' + randomUUID().slice(0, 8),
         label,
         law: law || '산업안전보건법 제5조 (사업주의 일반적 의무)',
-        lawShort: text(body.lawShort, 60) || (law ? law.split(' ').slice(0, 2).join(' ') : '산안법 제5조'),
+        lawShort: text(body.lawShort, 60) || (law ? shortenLaw(law) : '산안법 제5조'),
         summary: text(body.summary, 400),
         guide: (Array.isArray(body.guide) ? body.guide : [])
           .map((g) => text(g, 160)).filter(Boolean).slice(0, 6)
