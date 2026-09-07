@@ -111,6 +111,36 @@ h1, h2, h3, p, dl, dd, figure { margin: 0; }
   margin-top: 10px; font-size: 13px; color: var(--c-text-sub);
 }
 
+/* ------------------------------------------------------------- 로그인 */
+.login {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  padding: 20px;
+  background: var(--c-bg);
+}
+.login__box {
+  width: 100%; max-width: 380px;
+  display: grid; gap: 12px;
+  padding: 28px 24px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-top: 3px solid var(--c-navy);
+  border-radius: var(--r-md);
+}
+.login__mark {
+  display: grid; place-items: center;
+  width: 44px; height: 44px;
+  background: var(--c-navy); color: #fff; border-radius: var(--r-md);
+}
+.login__title { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.login__desc { font-size: 13px; color: var(--c-text-sub); margin-bottom: 4px; }
+.login__box .btn { margin-top: 4px; }
+
+@media (max-width: 767px) {
+  .login__box { padding: 24px 18px; }
+  .login__title { font-size: 17px; }
+}
+
 /* 저장 위치 안내 배지 */
 .conn {
   display: inline-flex; align-items: center; gap: 7px;

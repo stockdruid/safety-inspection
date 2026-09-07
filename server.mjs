@@ -11,13 +11,15 @@ import { readFile, writeFile, mkdir, rename, unlink, stat } from 'node:fs/promis
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash, timingSafeEqual, randomBytes } from 'node:crypto';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
+const ACCESS_FILE = path.join(DATA_DIR, 'access.json');
 
 const PORT = Number(process.env.PORT) || 5180;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -72,6 +74,115 @@ async function writeRecords(records) {
   const tmp = RECORDS_FILE + '.tmp';
   await writeFile(tmp, JSON.stringify(records, null, 2), 'utf8');
   await rename(tmp, RECORDS_FILE);
+}
+
+/* ================================================================== 인증
+   외부(인터넷)에 노출해도 아무나 기록을 보지 못하도록 공유 비밀번호를 요구한다.
+   비밀번호는 data/access.json 에 평문으로 두어 담당자가 직접 열어 바꿀 수 있게 했다.
+   ================================================================== */
+let access = null;      // { password, salt }
+let sessionToken = '';  // 비밀번호에서 파생된 값. 서버를 다시 켜도 로그인이 유지된다.
+
+const COOKIE_NAME = 'si_session';
+const SESSION_DAYS = 30;
+const MAX_FAILS = 5;
+const LOCK_MS = 60 * 1000;
+const loginFails = new Map(); // ip -> { count, lockUntil }
+
+async function loadAccess() {
+  if (process.env.ACCESS_PASSWORD) {
+    return { password: String(process.env.ACCESS_PASSWORD), salt: 'env', fromEnv: true };
+  }
+  try {
+    const parsed = JSON.parse(await readFile(ACCESS_FILE, 'utf8'));
+    if (parsed && typeof parsed.password === 'string' && parsed.password.trim() && typeof parsed.salt === 'string') {
+      return { password: String(parsed.password).trim(), salt: parsed.salt };
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('비밀번호 파일을 읽지 못해 새로 만듭니다:', err.message);
+  }
+  const created = {
+    password: String(Math.floor(100000 + Math.random() * 900000)),
+    salt: randomBytes(16).toString('hex')
+  };
+  await writeFile(ACCESS_FILE, JSON.stringify(created, null, 2), 'utf8');
+  created.isNew = true;
+  return created;
+}
+
+function deriveToken(cfg) {
+  return createHash('sha256').update(cfg.salt + ':' + cfg.password).digest('hex');
+}
+
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+function readCookie(req, name) {
+  const header = req.headers.cookie;
+  if (!header) return '';
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return '';
+}
+
+function isAuthed(req) {
+  return safeEqual(readCookie(req, COOKIE_NAME), sessionToken);
+}
+
+function clientIP(req) {
+  return req.socket.remoteAddress || 'unknown';
+}
+
+/** 인증이 필요한 경로인지 판단한다. 로그인 자체와 UI 화면은 열어 둔다. */
+function needsAuth(urlPath) {
+  if (urlPath === '/api/login' || urlPath === '/api/session' || urlPath === '/api/logout') return false;
+  return urlPath.startsWith('/api/') || urlPath.startsWith('/photos/');
+}
+
+async function handleAuth(req, res, urlPath) {
+  if (urlPath === '/api/session' && req.method === 'GET') {
+    return sendJSON(res, 200, { authenticated: isAuthed(req) });
+  }
+
+  if (urlPath === '/api/logout' && req.method === 'POST') {
+    res.setHeader('Set-Cookie', COOKIE_NAME + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (urlPath === '/api/login' && req.method === 'POST') {
+    const ip = clientIP(req);
+    const record = loginFails.get(ip);
+    if (record && record.lockUntil > Date.now()) {
+      const wait = Math.ceil((record.lockUntil - Date.now()) / 1000);
+      return sendJSON(res, 429, { error: '입력을 여러 번 틀렸습니다. ' + wait + '초 뒤에 다시 시도해 주세요.' });
+    }
+
+    const body = await readBody(req);
+    if (!safeEqual(String(body.password || ''), access.password)) {
+      const next = { count: (record ? record.count : 0) + 1, lockUntil: 0 };
+      if (next.count >= MAX_FAILS) {
+        next.lockUntil = Date.now() + LOCK_MS;
+        next.count = 0;
+      }
+      loginFails.set(ip, next);
+      return sendJSON(res, 401, { error: '비밀번호가 맞지 않습니다.' });
+    }
+
+    loginFails.delete(ip);
+    res.setHeader('Set-Cookie',
+      COOKIE_NAME + '=' + sessionToken +
+      '; Path=/; Max-Age=' + (SESSION_DAYS * 24 * 60 * 60) + '; HttpOnly; SameSite=Lax');
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
 }
 
 /* ------------------------------------------------------------ 입력 검증 */
@@ -183,7 +294,7 @@ async function serveStatic(req, res, urlPath) {
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
       'Content-Length': info.size,
-      'Cache-Control': rel.startsWith('photos/') ? 'public, max-age=604800' : 'no-cache'
+      'Cache-Control': rel.startsWith('photos/') ? 'private, max-age=604800' : 'no-cache'
     });
     if (req.method === 'HEAD') return res.end();
     createReadStream(filePath).pipe(res);
@@ -268,6 +379,12 @@ async function handleAPI(req, res, urlPath) {
 const server = http.createServer(async (req, res) => {
   const urlPath = new URL(req.url, 'http://localhost').pathname;
   try {
+    if (urlPath === '/api/login' || urlPath === '/api/session' || urlPath === '/api/logout') {
+      return await handleAuth(req, res, urlPath);
+    }
+    if (needsAuth(urlPath) && !isAuthed(req)) {
+      return sendJSON(res, 401, { error: '로그인이 필요합니다.' });
+    }
     if (urlPath.startsWith('/api/')) return await handleAPI(req, res, urlPath);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
@@ -305,6 +422,9 @@ server.on('error', (err) => {
 });
 
 await ensureDirs();
+access = await loadAccess();
+sessionToken = deriveToken(access);
+
 server.listen(PORT, HOST, () => {
   console.log('');
   console.log('========================================================');
@@ -316,10 +436,26 @@ server.listen(PORT, HOST, () => {
     console.log('  휴대폰/태블릿   : http://' + ip + ':' + PORT + '/');
   }
   console.log('');
+  console.log('  ----------------------------------------------------');
+  console.log('   접속 비밀번호 : ' + access.password);
+  console.log('  ----------------------------------------------------');
+  if (access.isNew) {
+    console.log('   * 비밀번호를 새로 만들었습니다. 이전에 쓰던 번호가 있었다면');
+    console.log('     data\\access.json 파일이 지워진 것이니 담당자에게 알려 주세요.');
+  }
+  console.log('');
   console.log('  * 휴대폰은 이 컴퓨터와 같은 와이파이에 연결되어 있어야 합니다.');
   console.log('  * 점검 기록 저장 위치 : ' + RECORDS_FILE);
   console.log('  * 현장 사진 저장 위치 : ' + PHOTO_DIR);
   console.log('');
   console.log('  종료하려면 이 검은 창을 닫으세요. (창을 닫으면 접속도 끊깁니다)');
   console.log('');
+
+  // 실행기(서버 시작.bat)로 켰을 때만, 서버가 준비된 뒤 브라우저를 연다.
+  if (process.env.OPEN_BROWSER === '1' && process.platform === 'win32') {
+    spawn('cmd', ['/c', 'start', '', 'http://localhost:' + PORT + '/'], {
+      detached: true,
+      stdio: 'ignore'
+    }).unref();
+  }
 });

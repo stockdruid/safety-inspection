@@ -1,6 +1,9 @@
 # 실제 점검 기록과 현장 사진은 저장소에 올리지 않는다
 data/
 
+# 외부 접속용 실행 파일 (첫 실행 시 자동으로 내려받음, 약 70MB)
+cloudflared.exe
+
 # 로컬 개발 설정 / 임시 파일
 .claude/
 node_modules/

@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 > nul
 title 안전보건 순회점검 서버
 cd /d "%~dp0"
 
@@ -22,7 +21,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-start "" http://localhost:5180/
+set OPEN_BROWSER=1
 node server.mjs
 
 echo.

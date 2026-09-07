@@ -13,6 +13,25 @@
 <body>
 <a class="skip-link" href="#main">본문 바로가기</a>
 
+<div class="login" id="loginOverlay" hidden>
+  <form class="login__box" id="loginForm">
+    <span class="login__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="10.5" width="16" height="10" rx="2"/>
+        <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
+      </svg>
+    </span>
+    <h1 class="login__title">안전보건 순회점검 시스템</h1>
+    <p class="login__desc">접속 비밀번호를 입력해 주세요. 한 번 입력하면 이 기기에서는 다시 묻지 않습니다.</p>
+    <div class="field">
+      <label for="loginPassword">접속 비밀번호</label>
+      <input type="password" id="loginPassword" inputmode="numeric" autocomplete="current-password" required>
+    </div>
+    <p class="form__error" id="loginError" role="alert" hidden></p>
+    <button type="submit" class="btn btn--primary" id="loginSubmit">들어가기</button>
+  </form>
+</div>
+
 <div class="gov-bar">
   <div class="wrap gov-bar__inner">
     <span class="gov-bar__org">삼우기업주식회사</span>

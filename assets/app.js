@@ -92,6 +92,11 @@
     refreshBtn: $('refreshBtn'),
     conn: $('connState'),
     connText: $('connText'),
+    loginOverlay: $('loginOverlay'),
+    loginForm: $('loginForm'),
+    loginPassword: $('loginPassword'),
+    loginError: $('loginError'),
+    loginSubmit: $('loginSubmit'),
     statTotal: $('statTotal'),
     statDone: $('statDone'),
     statDoing: $('statDoing'),
@@ -138,12 +143,24 @@
     records: []
   };
 
-  function api(pathSuffix, options) {
-    return fetch(API_BASE + (pathSuffix || ''), options).then(function (res) {
+  function request(url, options) {
+    return fetch(url, Object.assign({ credentials: 'same-origin' }, options)).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        if (!res.ok) throw new Error(data.error || '서버 오류 (' + res.status + ')');
+        if (!res.ok) {
+          var err = new Error(data.error || '서버 오류 (' + res.status + ')');
+          err.status = res.status;
+          throw err;
+        }
         return data;
       });
+    });
+  }
+
+  function api(pathSuffix, options) {
+    return request(API_BASE + (pathSuffix || ''), options).catch(function (err) {
+      // 세션이 끊기면 로그인 화면을 다시 띄운다.
+      if (err.status === 401 && store.mode === 'server') showLogin();
+      throw err;
     });
   }
 
@@ -193,14 +210,26 @@
     }];
   }
 
-  /** 서버 연결을 시도하고 실패하면 로컬 모드로 내려간다. */
+  /**
+   * 서버 연결을 시도한다.
+   * - 정상 응답  → 서버 모드
+   * - 401       → 서버는 있으나 로그인 필요 → 로그인 화면
+   * - 그 외 실패 → 서버 없음 → 로컬 모드
+   */
   store.init = function () {
-    return api('', { headers: { 'Accept': 'application/json' } })
+    return request(API_BASE, { headers: { 'Accept': 'application/json' } })
       .then(function (data) {
         store.mode = 'server';
         store.records = Array.isArray(data.records) ? data.records : [];
+        hideLogin();
       })
       .catch(function (err) {
+        if (err.status === 401) {
+          store.mode = 'server';
+          store.records = [];
+          showLogin();
+          return;
+        }
         console.info('공유 서버에 연결할 수 없어 이 기기에만 저장합니다.', err.message);
         store.mode = 'local';
         store.records = readLocal();
@@ -283,6 +312,42 @@
     els.conn.hidden = false;
     els.refreshBtn.hidden = !isServer;
   }
+
+  /* ------------------------------------------------------------- 로그인 */
+  function showLogin() {
+    els.loginOverlay.hidden = false;
+    els.loginError.hidden = true;
+    els.loginPassword.value = '';
+    els.loginPassword.focus();
+  }
+
+  function hideLogin() {
+    els.loginOverlay.hidden = true;
+  }
+
+  els.loginForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var password = els.loginPassword.value.trim();
+    if (!password) return;
+
+    els.loginSubmit.disabled = true;
+    els.loginError.hidden = true;
+
+    request(new URL('api/login', document.baseURI).href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    })
+      .then(function () {
+        return store.init().then(renderTables);
+      })
+      .catch(function (err) {
+        els.loginError.textContent = err.message;
+        els.loginError.hidden = false;
+        els.loginPassword.select();
+      })
+      .then(function () { els.loginSubmit.disabled = false; });
+  });
 
   function reportError(err) {
     console.error(err);
