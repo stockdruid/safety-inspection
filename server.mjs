@@ -10,6 +10,7 @@ import http from 'node:http';
 import { readFile, writeFile, mkdir, rename, unlink, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
@@ -279,13 +280,34 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+/** 휴대폰에서 접속할 때 쓸 사내망 주소를 찾아 알려준다. */
+function lanAddresses() {
+  const list = [];
+  const groups = Object.values(os.networkInterfaces());
+  for (const group of groups) {
+    for (const net of group || []) {
+      if (net.family === 'IPv4' && !net.internal) list.push(net.address);
+    }
+  }
+  return list;
+}
+
 await ensureDirs();
 server.listen(PORT, HOST, () => {
-  console.log('안전보건 순회점검 서버 실행 중');
-  console.log('  주소   : http://localhost:' + PORT + '/');
-  console.log('  데이터 : ' + RECORDS_FILE);
-  console.log('  사진   : ' + PHOTO_DIR);
-  if (HOST === '0.0.0.0') {
-    console.log('  같은 네트워크의 다른 기기에서는 이 PC의 사설 IP로 접속하세요.');
+  console.log('');
+  console.log('========================================================');
+  console.log('  안전보건 순회점검 서버가 실행되었습니다.');
+  console.log('========================================================');
+  console.log('');
+  console.log('  이 컴퓨터에서   : http://localhost:' + PORT + '/');
+  for (const ip of lanAddresses()) {
+    console.log('  휴대폰/태블릿   : http://' + ip + ':' + PORT + '/');
   }
+  console.log('');
+  console.log('  * 휴대폰은 이 컴퓨터와 같은 와이파이에 연결되어 있어야 합니다.');
+  console.log('  * 점검 기록 저장 위치 : ' + RECORDS_FILE);
+  console.log('  * 현장 사진 저장 위치 : ' + PHOTO_DIR);
+  console.log('');
+  console.log('  종료하려면 이 검은 창을 닫으세요. (창을 닫으면 접속도 끊깁니다)');
+  console.log('');
 });
