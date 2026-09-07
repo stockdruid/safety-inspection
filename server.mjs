@@ -292,6 +292,18 @@ function lanAddresses() {
   return list;
 }
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('');
+    console.error('  [실행 실패] ' + PORT + '번 포트를 이미 다른 프로그램이 쓰고 있습니다.');
+    console.error('  서버가 이미 켜져 있을 수 있습니다. 열려 있는 검은 창을 모두 닫고 다시 실행해 주세요.');
+    console.error('');
+  } else {
+    console.error('  [실행 실패] ' + err.message);
+  }
+  process.exit(1);
+});
+
 await ensureDirs();
 server.listen(PORT, HOST, () => {
   console.log('');
