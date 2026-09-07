@@ -77,33 +77,56 @@
         </div>
         <div class="field">
           <label for="inspector">점검 담당자 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="inspector" name="inspector" placeholder="예) 최필재 부장" autocomplete="off" required>
+          <input type="text" id="inspector" name="inspector" list="inspectorList" placeholder="선택하거나 입력" autocomplete="off" required>
+          <datalist id="inspectorList"></datalist>
         </div>
       </div>
 
       <div class="field-row">
         <div class="field">
           <label for="attendees">입회자 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="attendees" name="attendees" placeholder="예) 생산팀장" autocomplete="off" required>
+          <input type="text" id="attendees" name="attendees" list="attendeeList" placeholder="선택하거나 입력" autocomplete="off" required>
+          <datalist id="attendeeList"></datalist>
         </div>
         <div class="field">
           <label for="location">점검 장소 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="location" name="location" placeholder="예) 제1공장 프레스 2호기" autocomplete="off" required>
+          <input type="text" id="location" name="location" list="locationList" placeholder="선택하거나 입력" autocomplete="off" required>
+          <datalist id="locationList"></datalist>
         </div>
       </div>
 
       <div class="field">
-        <label for="category">위험 유형 <span class="req" aria-hidden="true">*</span></label>
+        <span class="field__label label-row">
+          <label for="category">위험 유형 <span class="req" aria-hidden="true">*</span></label>
+          <button type="button" class="link-btn" id="addCategoryBtn">＋ 유형 추가</button>
+        </span>
         <div class="select-wrap">
-          <select id="category" name="category" required>
-            <option value="">위험 유형을 선택하세요</option>
-            <option value="machine">기계·기구 위험 방지 (끼임·협착)</option>
-            <option value="fall">추락 및 전도 재해 예방</option>
-            <option value="electric">전기 설비 안전</option>
-            <option value="chemical">유해화학물질 및 보호구</option>
-            <option value="fire">화재 및 폭발 예방</option>
-            <option value="etc">기타 안전보건 사항</option>
-          </select>
+          <select id="category" name="category" required></select>
+        </div>
+
+        <div class="subform" id="categoryForm" hidden>
+          <p class="subform__title">새 위험 유형 추가</p>
+          <div class="field">
+            <label for="newCatLabel">유형 이름 <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="newCatLabel" placeholder="예) 밀폐공간 질식" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="newCatLaw">관련 법조항</label>
+            <input type="text" id="newCatLaw" placeholder="예) 산업안전보건기준에 관한 규칙 제619조" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="newCatSummary">위반 요지</label>
+            <textarea id="newCatSummary" rows="2" placeholder="예) 밀폐공간 작업 전 산소농도를 측정하지 않은 상태입니다."></textarea>
+          </div>
+          <div class="field">
+            <label for="newCatGuide">개선 조치 (줄바꿈으로 구분)</label>
+            <textarea id="newCatGuide" rows="3" placeholder="작업 즉시 중지&#10;산소·유해가스 농도 측정&#10;감시인 배치 후 재개"></textarea>
+          </div>
+          <p class="form__error" id="categoryError" role="alert" hidden></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn--primary btn--sm" id="saveCategoryBtn">유형 저장</button>
+            <button type="button" class="btn btn--line btn--sm" id="cancelCategoryBtn">취소</button>
+          </div>
         </div>
       </div>
 
@@ -127,8 +150,12 @@
         <p class="help" id="photoHelp">모바일에서는 후면 카메라가 바로 실행됩니다. 저장 시 자동으로 압축됩니다.</p>
         <figure class="preview" id="previewBox" hidden>
           <img id="imgPreview" alt="첨부한 현장 사진 미리보기">
-          <button type="button" class="btn btn--ghost btn--sm" id="removePhoto">사진 삭제</button>
+          <div class="preview__actions">
+            <button type="button" class="btn btn--line btn--sm" id="analyzeBtn" hidden>사진으로 초안 작성</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="removePhoto">사진 삭제</button>
+          </div>
         </figure>
+        <p class="notice" id="analyzeNotice" role="status" hidden></p>
       </div>
 
       <div class="confirm">
@@ -143,6 +170,17 @@
         <button type="button" class="btn btn--line" id="sampleBtn">예시 불러오기</button>
       </div>
     </form>
+
+    <details class="manage" id="optionManager">
+      <summary>선택 항목 관리</summary>
+      <div class="manage__body">
+        <p class="help">등록할 때 입력한 담당자·입회자·장소는 자동으로 목록에 추가됩니다. 쓰지 않는 항목은 여기서 지웁니다.</p>
+        <div class="chips" data-group="inspectors"><span class="chips__title">담당자</span><div class="chips__list"></div></div>
+        <div class="chips" data-group="attendees"><span class="chips__title">입회자</span><div class="chips__list"></div></div>
+        <div class="chips" data-group="locations"><span class="chips__title">점검 장소</span><div class="chips__list"></div></div>
+        <div class="chips" data-group="categories"><span class="chips__title">위험 유형</span><div class="chips__list"></div></div>
+      </div>
+    </details>
   </section>
 
   <!-- 우: 결과 + 이력 -->

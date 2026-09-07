@@ -20,6 +20,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
 const ACCESS_FILE = path.join(DATA_DIR, 'access.json');
+const OPTIONS_FILE = path.join(DATA_DIR, 'options.json');
 
 const PORT = Number(process.env.PORT) || 5180;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -27,8 +28,53 @@ const HOST = process.env.HOST || '0.0.0.0';
 const MAX_BODY = 12 * 1024 * 1024;   // 요청 본문 최대 12MB
 const MAX_PHOTO = 4 * 1024 * 1024;   // 사진 1장 최대 4MB
 
-const CATEGORIES = ['machine', 'fall', 'electric', 'chemical', 'fire', 'etc'];
 const STATUSES = ['완료', '진행중', '보류'];
+
+/** 자유 입력값을 모아 두는 선택 목록. 담당자·입회자·장소는 현장에서 반복 입력되는 값이다. */
+const TEXT_GROUPS = ['inspectors', 'attendees', 'locations'];
+const MAX_OPTIONS = 300;
+
+/** 처음 실행할 때 채워 넣는 기본 위험 유형. 사용자가 추가·삭제할 수 있다. */
+const DEFAULT_CATEGORIES = [
+  {
+    key: 'machine', label: '기계·기구',
+    law: '산업안전보건법 제38조 / 안전보건규칙 제87조', lawShort: '산안규칙 제87조',
+    summary: '위험 기계 가동 중 방호장치를 임의 해제하였거나 정상 작동하지 않는 상태입니다.',
+    guide: ['해당 기계 가동 즉시 중지', '방호장치 점검 및 교체', '관리감독자 확인 후 작업 재개']
+  },
+  {
+    key: 'fall', label: '추락·전도',
+    law: '산업안전보건기준에 관한 규칙 제42조', lawShort: '산안규칙 제42조',
+    summary: '고소 작업 구간에 안전난간이 설치되지 않았거나 안전대를 체결하지 않은 상태입니다.',
+    guide: ['해당 구간 작업 즉시 중단', '표준 안전난간 설치', '전신형 안전대 체결 상태 확인']
+  },
+  {
+    key: 'electric', label: '전기설비',
+    law: '산업안전보건기준에 관한 규칙 제301조', lawShort: '산안규칙 제301조',
+    summary: '배·분전반 충전부가 노출되어 감전 위험이 있는 상태입니다.',
+    guide: ['분전반 주변 정리 및 접근 통제', '절연 덮개 설치', '감전주의 경고표지 부착']
+  },
+  {
+    key: 'chemical', label: '화학물질',
+    law: '산업안전보건법 제110조 / 제114조', lawShort: '산안법 제110조',
+    summary: 'MSDS 경고표시가 누락되었거나 적합한 보호구를 착용하지 않은 상태입니다.',
+    guide: ['해당 작업 일시 중지', 'MSDS 경고표지 부착 및 게시', '방독마스크 등 보호구 지급·착용']
+  },
+  {
+    key: 'fire', label: '화재·폭발',
+    law: '산업안전보건기준에 관한 규칙 제241조', lawShort: '산안규칙 제241조',
+    summary: '인화성 물질 취급 장소에서 화기 작업 중 소화설비가 배치되지 않았습니다.',
+    guide: ['화기 작업 중단', '소화기 배치 및 화재감시인 지정', '화기작업 허가서 재확인']
+  },
+  {
+    key: 'etc', label: '기타',
+    law: '산업안전보건법 제5조 (사업주의 일반적 의무)', lawShort: '산안법 제5조',
+    summary: '사업주는 근로자의 안전과 건강을 유지·증진시킬 의무가 있습니다.',
+    guide: ['위험요인 확인 및 작업 중지 검토', '개선 조치 계획 수립', '조치 완료 후 관리감독자 확인']
+  }
+];
+
+let options = null; // { inspectors, attendees, locations, categories }
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -74,6 +120,140 @@ async function writeRecords(records) {
   const tmp = RECORDS_FILE + '.tmp';
   await writeFile(tmp, JSON.stringify(records, null, 2), 'utf8');
   await rename(tmp, RECORDS_FILE);
+}
+
+/* -------------------------------------------------------------- 선택 목록 */
+
+async function readOptions() {
+  try {
+    const parsed = JSON.parse(await readFile(OPTIONS_FILE, 'utf8'));
+    return normalizeOptions(parsed);
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('선택 목록을 읽지 못해 기본값을 씁니다:', err.message);
+    const initial = normalizeOptions({});
+    await writeOptions(initial);
+    return initial;
+  }
+}
+
+function normalizeOptions(raw) {
+  const result = { categories: [] };
+  for (const group of TEXT_GROUPS) {
+    const list = Array.isArray(raw[group]) ? raw[group] : [];
+    result[group] = [...new Set(list.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim()))]
+      .slice(0, MAX_OPTIONS);
+  }
+  const cats = Array.isArray(raw.categories) && raw.categories.length ? raw.categories : DEFAULT_CATEGORIES;
+  result.categories = cats
+    .filter((c) => c && typeof c.key === 'string' && typeof c.label === 'string')
+    .map((c) => ({
+      key: c.key,
+      label: String(c.label).slice(0, 40),
+      law: String(c.law || '').slice(0, 160),
+      lawShort: String(c.lawShort || c.law || '').slice(0, 60),
+      summary: String(c.summary || '').slice(0, 400),
+      guide: (Array.isArray(c.guide) ? c.guide : []).slice(0, 6).map((g) => String(g).slice(0, 160))
+    }))
+    .slice(0, MAX_OPTIONS);
+  return result;
+}
+
+async function writeOptions(next) {
+  const tmp = OPTIONS_FILE + '.tmp';
+  await writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
+  await rename(tmp, OPTIONS_FILE);
+}
+
+function findCategory(key) {
+  return options.categories.find((c) => c.key === key) || null;
+}
+
+/** 자주 쓰는 값을 다음 점검에서 바로 고를 수 있도록 목록에 넣어 둔다. */
+async function rememberValues(values) {
+  let changed = false;
+  for (const [group, value] of Object.entries(values)) {
+    const text = String(value || '').trim();
+    if (!text || !TEXT_GROUPS.includes(group)) continue;
+    if (options[group].includes(text)) continue;
+    if (options[group].length >= MAX_OPTIONS) continue;
+    options[group].push(text);
+    options[group].sort((a, b) => a.localeCompare(b, 'ko'));
+    changed = true;
+  }
+  if (changed) await enqueue(() => writeOptions(options));
+}
+
+async function handleOptions(req, res, urlPath) {
+  if (urlPath === '/api/options' && req.method === 'GET') {
+    return sendJSON(res, 200, { options, features: { analyze: analyzeEnabled() } });
+  }
+
+  if (urlPath === '/api/options' && req.method === 'POST') {
+    const body = await readBody(req);
+    const group = String(body.group || '');
+
+    if (TEXT_GROUPS.includes(group)) {
+      const value = text(body.value, 100);
+      if (!value) return sendJSON(res, 400, { error: '추가할 값을 입력해 주세요.' });
+      if (options[group].includes(value)) return sendJSON(res, 409, { error: '이미 있는 항목입니다.' });
+      if (options[group].length >= MAX_OPTIONS) {
+        return sendJSON(res, 400, { error: '항목이 너무 많습니다. 쓰지 않는 항목을 지운 뒤 추가해 주세요.' });
+      }
+      options[group].push(value);
+      options[group].sort((a, b) => a.localeCompare(b, 'ko'));
+      await enqueue(() => writeOptions(options));
+      return sendJSON(res, 201, { options });
+    }
+
+    if (group === 'categories') {
+      const label = text(body.label, 40);
+      const law = text(body.law, 160);
+      if (!label) return sendJSON(res, 400, { error: '위험 유형 이름을 입력해 주세요.' });
+      if (options.categories.some((c) => c.label === label)) {
+        return sendJSON(res, 409, { error: '이미 있는 위험 유형입니다.' });
+      }
+      const category = {
+        key: 'c-' + randomUUID().slice(0, 8),
+        label,
+        law: law || '산업안전보건법 제5조 (사업주의 일반적 의무)',
+        lawShort: text(body.lawShort, 60) || (law ? law.split(' ').slice(0, 2).join(' ') : '산안법 제5조'),
+        summary: text(body.summary, 400),
+        guide: (Array.isArray(body.guide) ? body.guide : [])
+          .map((g) => text(g, 160)).filter(Boolean).slice(0, 6)
+      };
+      options.categories.push(category);
+      await enqueue(() => writeOptions(options));
+      return sendJSON(res, 201, { options, category });
+    }
+
+    return sendJSON(res, 400, { error: '알 수 없는 항목 종류입니다.' });
+  }
+
+  const delMatch = /^\/api\/options\/([a-z]+)\/(.+)$/.exec(urlPath);
+  if (delMatch && req.method === 'DELETE') {
+    const group = delMatch[1];
+    const value = decodeURIComponent(delMatch[2]);
+
+    if (TEXT_GROUPS.includes(group)) {
+      const before = options[group].length;
+      options[group] = options[group].filter((v) => v !== value);
+      if (options[group].length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
+    } else if (group === 'categories') {
+      if (options.categories.length <= 1) {
+        return sendJSON(res, 400, { error: '위험 유형은 최소 한 개는 남아 있어야 합니다.' });
+      }
+      const before = options.categories.length;
+      options.categories = options.categories.filter((c) => c.key !== value);
+      if (options.categories.length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
+    } else {
+      return sendJSON(res, 400, { error: '알 수 없는 항목 종류입니다.' });
+    }
+
+    await enqueue(() => writeOptions(options));
+    return sendJSON(res, 200, { options });
+  }
+
+  return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
 }
 
 /* ================================================================== 인증
@@ -196,12 +376,17 @@ function isISODate(value) {
 }
 
 function validateNew(body) {
+  const category = findCategory(body.category);
   const rec = {
     date: isISODate(body.date) ? body.date : '',
     inspector: text(body.inspector, 50),
     attendees: text(body.attendees, 50),
     location: text(body.location, 100),
-    category: CATEGORIES.includes(body.category) ? body.category : '',
+    category: category ? category.key : '',
+    // 위험 유형은 나중에 지워질 수 있으므로 등록 시점의 내용을 기록에 함께 남긴다.
+    categoryLabel: category ? category.label : '',
+    law: category ? category.law : '',
+    lawShort: category ? category.lawShort : '',
     issue: text(body.issue, 2000),
     status: STATUSES.includes(body.status) ? body.status : '진행중',
     action: text(body.action, 300)
@@ -233,6 +418,105 @@ async function removePhoto(publicPath) {
     await unlink(path.join(PHOTO_DIR, name));
   } catch (err) {
     if (err.code !== 'ENOENT') console.warn('사진 삭제 실패:', err.message);
+  }
+}
+
+/* ============================================================ 사진 분석
+   ANTHROPIC_API_KEY 가 있을 때만 켜지는 선택 기능.
+   사진을 Claude에 보내 위험 유형과 지적사항 '초안'을 받아온다. 판단은 사람이 한다.
+   ============================================================ */
+let anthropic = null;
+
+const ANALYZE_SCHEMA = {
+  type: 'object',
+  properties: {
+    category: { type: 'string', description: '가장 알맞은 위험 유형의 key 값' },
+    issue: { type: 'string', description: '점검대장에 적을 지적사항 초안. 한두 문장의 개조식 한국어.' },
+    findings: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '사진에서 실제로 확인되는 위험요인. 추측이면 포함하지 않는다.'
+    },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+  },
+  required: ['category', 'issue', 'findings', 'confidence'],
+  additionalProperties: false
+};
+
+async function initAnalyze() {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    anthropic = new Anthropic();
+  } catch (err) {
+    console.warn('사진 분석 기능을 켜지 못했습니다. `npm install` 후 다시 실행하세요:', err.message);
+  }
+}
+
+function analyzeEnabled() {
+  return Boolean(anthropic);
+}
+
+async function handleAnalyze(req, res) {
+  if (req.method !== 'POST') return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
+  if (!analyzeEnabled()) {
+    return sendJSON(res, 503, { error: '사진 분석 기능이 꺼져 있습니다. 관리자에게 문의해 주세요.' });
+  }
+
+  const body = await readBody(req);
+  const match = /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.photo || ''));
+  if (!match) return sendJSON(res, 400, { error: '분석할 사진을 먼저 첨부해 주세요.' });
+
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > MAX_PHOTO) return sendJSON(res, 400, { error: '사진 용량이 너무 큽니다.' });
+
+  const catalog = options.categories
+    .map((c) => '- ' + c.key + ': ' + c.label + (c.summary ? ' — ' + c.summary : ''))
+    .join('\n');
+  const hint = text(body.hint, 500);
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-5',
+      max_tokens: 2000,
+      system:
+        '당신은 대한민국 산업안전보건법에 따른 사업장 순회점검을 보조합니다. ' +
+        '현장 사진에서 실제로 보이는 위험요인만 지적하고, 보이지 않는 것은 추측하지 않습니다. ' +
+        '결과는 점검 담당자가 검토·수정할 초안입니다.',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/' + (match[1] === 'jpg' ? 'jpeg' : match[1]), data: match[2] } },
+          {
+            type: 'text',
+            text:
+              '이 현장 사진을 보고 안전보건 지적사항 초안을 작성해 주세요.\n\n' +
+              '선택 가능한 위험 유형:\n' + catalog + '\n\n' +
+              (hint ? '점검자 메모: ' + hint + '\n\n' : '') +
+              'category 에는 위 목록의 key 값을 그대로 넣으세요. ' +
+              '사진만으로 판단이 어려우면 confidence 를 low 로 하고 findings 를 비워 두세요.'
+          }
+        ]
+      }],
+      output_config: {
+        effort: 'low',
+        format: { type: 'json_schema', schema: ANALYZE_SCHEMA }
+      }
+    });
+
+    if (response.stop_reason === 'refusal') {
+      return sendJSON(res, 422, { error: '이 사진은 분석할 수 없습니다. 직접 입력해 주세요.' });
+    }
+
+    const textBlock = response.content.find((block) => block.type === 'text');
+    if (!textBlock) return sendJSON(res, 502, { error: '분석 결과를 읽지 못했습니다.' });
+
+    const result = JSON.parse(textBlock.text);
+    if (!findCategory(result.category)) result.category = '';
+    return sendJSON(res, 200, { result });
+  } catch (err) {
+    console.error('사진 분석 실패:', err);
+    return sendJSON(res, 502, { error: '분석에 실패했습니다. 잠시 후 다시 시도하거나 직접 입력해 주세요.' });
   }
 }
 
@@ -330,6 +614,11 @@ async function handleAPI(req, res, urlPath) {
       records.push(saved);
       await writeRecords(records);
     });
+    await rememberValues({
+      inspectors: saved.inspector,
+      attendees: saved.attendees,
+      locations: saved.location
+    });
     return sendJSON(res, 201, { record: saved });
   }
 
@@ -385,6 +674,8 @@ const server = http.createServer(async (req, res) => {
     if (needsAuth(urlPath) && !isAuthed(req)) {
       return sendJSON(res, 401, { error: '로그인이 필요합니다.' });
     }
+    if (urlPath.startsWith('/api/options')) return await handleOptions(req, res, urlPath);
+    if (urlPath === '/api/analyze') return await handleAnalyze(req, res);
     if (urlPath.startsWith('/api/')) return await handleAPI(req, res, urlPath);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
@@ -424,6 +715,8 @@ server.on('error', (err) => {
 await ensureDirs();
 access = await loadAccess();
 sessionToken = deriveToken(access);
+options = await readOptions();
+await initAnalyze();
 
 server.listen(PORT, HOST, () => {
   console.log('');

@@ -299,6 +299,77 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
   border: 1px solid #f0c9c9; border-radius: var(--r-sm);
 }
 
+.label-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.link-btn {
+  padding: 2px 4px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--c-primary); background: none; border: none;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.link-btn:hover { color: var(--c-primary-700); }
+
+/* 새 위험 유형 추가 폼 */
+.subform {
+  display: grid; gap: 10px;
+  margin-top: 10px; padding: 14px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-left: 3px solid var(--c-primary);
+  border-radius: var(--r-sm);
+}
+.subform__title { font-size: 13px; font-weight: 700; color: var(--c-navy); }
+.subform .btn-row { grid-template-columns: 1fr 1fr; }
+
+.preview__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.notice {
+  margin-top: 8px; padding: 9px 11px;
+  font-size: 12.5px; line-height: 1.45;
+  color: var(--c-navy); background: var(--c-primary-050);
+  border: 1px solid #c9daf6; border-radius: var(--r-sm);
+}
+.notice[data-tone="warn"] { color: var(--c-warn); background: var(--c-warn-bg); border-color: #e8d3a6; }
+.notice[data-tone="error"] { color: var(--c-danger); background: var(--c-danger-bg); border-color: #f0c9c9; }
+
+/* 선택 항목 관리 */
+.manage { border-top: 1px solid var(--c-line); }
+.manage > summary {
+  padding: 12px 16px;
+  font-size: 13px; font-weight: 600; color: var(--c-text-sub);
+  cursor: pointer; list-style: none;
+}
+.manage > summary::-webkit-details-marker { display: none; }
+.manage > summary::before { content: "▸ "; color: var(--c-text-mute); }
+.manage[open] > summary::before { content: "▾ "; }
+.manage > summary:hover { color: var(--c-text); background: var(--c-surface-alt); }
+.manage__body { display: grid; gap: 12px; padding: 0 16px 16px; }
+
+.chips__title {
+  display: block; margin-bottom: 5px;
+  font-size: 12px; font-weight: 600; color: var(--c-text-sub);
+}
+.chips__list { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 6px 4px 9px;
+  font-size: 12.5px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 100px;
+}
+.chip__del {
+  display: grid; place-items: center;
+  width: 17px; height: 17px; padding: 0;
+  font-family: inherit; font-size: 13px; line-height: 1;
+  color: var(--c-text-sub); background: var(--c-surface);
+  border: 1px solid var(--c-line-strong); border-radius: 50%;
+  cursor: pointer;
+}
+.chip__del:hover { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-bg); }
+.chips__empty { font-size: 12px; color: var(--c-text-mute); }
+
 /* ------------------------------------------------------------------ 버튼 */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;

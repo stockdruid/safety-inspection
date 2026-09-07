@@ -60,6 +60,25 @@
 
   var STATUSES = ['완료', '진행중', '보류'];
 
+  /** 서버가 없을 때(정적 배포) 쓰는 기본 선택 목록. 서버 모드에서는 서버 값으로 대체된다. */
+  function defaultOptions() {
+    return {
+      inspectors: [],
+      attendees: [],
+      locations: [],
+      categories: Object.keys(RISK_DB).map(function (key) {
+        return {
+          key: key,
+          label: RISK_DB[key].label,
+          law: RISK_DB[key].law,
+          lawShort: RISK_DB[key].lawShort,
+          summary: RISK_DB[key].summary,
+          guide: RISK_DB[key].guide
+        };
+      })
+    };
+  }
+
   /* ------------------------------------------------------------- DOM 참조 */
   var $ = function (id) { return document.getElementById(id); };
 
@@ -97,6 +116,21 @@
     loginPassword: $('loginPassword'),
     loginError: $('loginError'),
     loginSubmit: $('loginSubmit'),
+    inspectorList: $('inspectorList'),
+    attendeeList: $('attendeeList'),
+    locationList: $('locationList'),
+    addCategoryBtn: $('addCategoryBtn'),
+    categoryForm: $('categoryForm'),
+    newCatLabel: $('newCatLabel'),
+    newCatLaw: $('newCatLaw'),
+    newCatSummary: $('newCatSummary'),
+    newCatGuide: $('newCatGuide'),
+    categoryError: $('categoryError'),
+    saveCategoryBtn: $('saveCategoryBtn'),
+    cancelCategoryBtn: $('cancelCategoryBtn'),
+    optionManager: $('optionManager'),
+    analyzeBtn: $('analyzeBtn'),
+    analyzeNotice: $('analyzeNotice'),
     statTotal: $('statTotal'),
     statDone: $('statDone'),
     statDoing: $('statDoing'),
@@ -296,6 +330,124 @@
     return Promise.resolve();
   };
 
+  /* ------------------------------------------------------- 선택 목록 관리 */
+  var OPTIONS_URL = new URL('api/options', document.baseURI).href;
+  var OPTIONS_KEY = 'safety-inspection.options.v1';
+
+  store.options = defaultOptions();
+  store.features = { analyze: false };
+
+  function readLocalOptions() {
+    try {
+      var raw = localStorage.getItem(OPTIONS_KEY);
+      if (!raw) return defaultOptions();
+      var parsed = JSON.parse(raw);
+      var base = defaultOptions();
+      return {
+        inspectors: Array.isArray(parsed.inspectors) ? parsed.inspectors : base.inspectors,
+        attendees: Array.isArray(parsed.attendees) ? parsed.attendees : base.attendees,
+        locations: Array.isArray(parsed.locations) ? parsed.locations : base.locations,
+        categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : base.categories
+      };
+    } catch (err) {
+      console.error('선택 목록을 불러오지 못했습니다.', err);
+      return defaultOptions();
+    }
+  }
+
+  function writeLocalOptions() {
+    try {
+      localStorage.setItem(OPTIONS_KEY, JSON.stringify(store.options));
+    } catch (err) {
+      console.error('선택 목록 저장 실패', err);
+    }
+  }
+
+  store.loadOptions = function () {
+    if (store.mode !== 'server') {
+      store.options = readLocalOptions();
+      store.features = { analyze: false };
+      return Promise.resolve();
+    }
+    return request(OPTIONS_URL).then(function (data) {
+      if (data.options) store.options = data.options;
+      store.features = data.features || { analyze: false };
+    });
+  };
+
+  /** 담당자·입회자·장소 같은 단순 목록에 값을 추가한다. */
+  store.addOption = function (group, value) {
+    if (store.mode === 'server') {
+      return request(OPTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: group, value: value })
+      }).then(function (data) { store.options = data.options; });
+    }
+    if (store.options[group].indexOf(value) !== -1) return Promise.resolve();
+    store.options[group].push(value);
+    store.options[group].sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+    writeLocalOptions();
+    return Promise.resolve();
+  };
+
+  store.addCategory = function (category) {
+    if (store.mode === 'server') {
+      return request(OPTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ group: 'categories' }, category))
+      }).then(function (data) {
+        store.options = data.options;
+        return data.category;
+      });
+    }
+    if (store.options.categories.some(function (c) { return c.label === category.label; })) {
+      return Promise.reject(new Error('이미 있는 위험 유형입니다.'));
+    }
+    var created = {
+      key: 'c-' + makeId(),
+      label: category.label,
+      law: category.law || '산업안전보건법 제5조 (사업주의 일반적 의무)',
+      lawShort: category.law ? category.law.split(' ').slice(0, 2).join(' ') : '산안법 제5조',
+      summary: category.summary || '',
+      guide: category.guide || []
+    };
+    store.options.categories.push(created);
+    writeLocalOptions();
+    return Promise.resolve(created);
+  };
+
+  store.removeOption = function (group, value) {
+    if (store.mode === 'server') {
+      return request(OPTIONS_URL + '/' + group + '/' + encodeURIComponent(value), { method: 'DELETE' })
+        .then(function (data) { store.options = data.options; });
+    }
+    if (group === 'categories') {
+      if (store.options.categories.length <= 1) {
+        return Promise.reject(new Error('위험 유형은 최소 한 개는 남아 있어야 합니다.'));
+      }
+      store.options.categories = store.options.categories.filter(function (c) { return c.key !== value; });
+    } else {
+      store.options[group] = store.options[group].filter(function (v) { return v !== value; });
+    }
+    writeLocalOptions();
+    return Promise.resolve();
+  };
+
+  /** 위험 유형 정보를 찾는다. 삭제된 유형이면 기록에 남은 스냅샷으로 대체한다. */
+  function categoryInfo(rec) {
+    var found = null;
+    for (var i = 0; i < store.options.categories.length; i++) {
+      if (store.options.categories[i].key === rec.category) { found = store.options.categories[i]; break; }
+    }
+    if (found) return found;
+    if (rec.categoryLabel) {
+      return { label: rec.categoryLabel, law: rec.law || '', lawShort: rec.lawShort || '', summary: '', guide: [] };
+    }
+    return RISK_DB[rec.category] || RISK_DB.etc;
+  }
+
   store.find = function (id) {
     for (var i = 0; i < store.records.length; i++) {
       if (store.records[i].id === id) return store.records[i];
@@ -339,7 +491,12 @@
       body: JSON.stringify({ password: password })
     })
       .then(function () {
-        return store.init().then(renderTables);
+        return store.init()
+          .then(function () { return store.loadOptions(); })
+          .then(function () {
+            renderOptions();
+            renderTables();
+          });
       })
       .catch(function (err) {
         els.loginError.textContent = err.message;
@@ -396,7 +553,7 @@
 
   /* ------------------------------------------------------------- 결과 렌더 */
   function renderResult(rec) {
-    var db = RISK_DB[rec.category] || RISK_DB.etc;
+    var db = categoryInfo(rec);
     var photoHTML = rec.photo
       ? '<div class="result-card result-card--photo result-card--wide">' +
           '<h3>현장 사진</h3>' +
@@ -435,7 +592,7 @@
 
   /* -------------------------------------------------------------- 표 렌더 */
   function rowHTML(rec) {
-    var db = RISK_DB[rec.category] || RISK_DB.etc;
+    var db = categoryInfo(rec);
     var options = STATUSES.map(function (s) {
       return '<option value="' + s + '"' + (s === rec.status ? ' selected' : '') + '>' + s + '</option>';
     }).join('');
@@ -521,6 +678,107 @@
     }
   }
 
+  /* --------------------------------------------------- 선택 목록 화면 반영 */
+  function fillDatalist(el, values) {
+    el.innerHTML = values.map(function (v) {
+      return '<option value="' + escapeHTML(v) + '"></option>';
+    }).join('');
+  }
+
+  function renderOptions() {
+    fillDatalist(els.inspectorList, store.options.inspectors);
+    fillDatalist(els.attendeeList, store.options.attendees);
+    fillDatalist(els.locationList, store.options.locations);
+
+    var prev = els.category.value;
+    els.category.innerHTML = '<option value="">위험 유형을 선택하세요</option>' +
+      store.options.categories.map(function (c) {
+        return '<option value="' + escapeHTML(c.key) + '">' + escapeHTML(c.label) + '</option>';
+      }).join('');
+    if (store.options.categories.some(function (c) { return c.key === prev; })) els.category.value = prev;
+
+    renderChips();
+    els.analyzeBtn.hidden = !store.features.analyze;
+  }
+
+  function renderChips() {
+    var groups = els.optionManager.querySelectorAll('.chips');
+    Array.prototype.forEach.call(groups, function (box) {
+      var group = box.getAttribute('data-group');
+      var list = box.querySelector('.chips__list');
+      var items = group === 'categories'
+        ? store.options.categories.map(function (c) { return { value: c.key, label: c.label }; })
+        : store.options[group].map(function (v) { return { value: v, label: v }; });
+
+      list.innerHTML = items.length
+        ? items.map(function (item) {
+            return '<span class="chip">' + escapeHTML(item.label) +
+              '<button type="button" class="chip__del" data-group="' + group + '" ' +
+              'data-value="' + escapeHTML(item.value) + '" ' +
+              'aria-label="' + escapeHTML(item.label) + ' 삭제">×</button></span>';
+          }).join('')
+        : '<span class="chips__empty">등록된 항목이 없습니다.</span>';
+    });
+  }
+
+  els.optionManager.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.chip__del');
+    if (!btn) return;
+    var group = btn.getAttribute('data-group');
+    var value = btn.getAttribute('data-value');
+    if (!window.confirm('이 항목을 목록에서 지우시겠습니까? 이미 등록된 점검 기록은 그대로 남습니다.')) return;
+    btn.disabled = true;
+    store.removeOption(group, value)
+      .then(renderOptions)
+      .catch(function (err) { btn.disabled = false; reportError(err); });
+  });
+
+  /* 새 위험 유형 추가 */
+  els.addCategoryBtn.addEventListener('click', function () {
+    var opening = els.categoryForm.hidden;
+    els.categoryForm.hidden = !opening;
+    els.categoryError.hidden = true;
+    if (opening) els.newCatLabel.focus();
+  });
+
+  els.cancelCategoryBtn.addEventListener('click', function () {
+    els.categoryForm.hidden = true;
+    els.categoryError.hidden = true;
+  });
+
+  els.saveCategoryBtn.addEventListener('click', function () {
+    var label = els.newCatLabel.value.trim();
+    if (!label) {
+      els.categoryError.textContent = '유형 이름을 입력해 주세요.';
+      els.categoryError.hidden = false;
+      els.newCatLabel.focus();
+      return;
+    }
+
+    els.saveCategoryBtn.disabled = true;
+    store.addCategory({
+      label: label,
+      law: els.newCatLaw.value.trim(),
+      summary: els.newCatSummary.value.trim(),
+      guide: els.newCatGuide.value.split('\n').map(function (g) { return g.trim(); }).filter(Boolean)
+    })
+      .then(function (created) {
+        renderOptions();
+        if (created && created.key) els.category.value = created.key;
+        els.categoryForm.hidden = true;
+        els.categoryError.hidden = true;
+        els.newCatLabel.value = '';
+        els.newCatLaw.value = '';
+        els.newCatSummary.value = '';
+        els.newCatGuide.value = '';
+      })
+      .catch(function (err) {
+        els.categoryError.textContent = err.message;
+        els.categoryError.hidden = false;
+      })
+      .then(function () { els.saveCategoryBtn.disabled = false; });
+  });
+
   function renderStats() {
     var done = 0, doing = 0, hold = 0;
     store.records.forEach(function (r) {
@@ -596,6 +854,13 @@
 
     store.add(payload)
       .then(function (saved) {
+        // 로컬 모드에서는 클라이언트가 직접 목록을 쌓는다. (서버 모드는 서버가 처리)
+        if (store.mode === 'local') {
+          store.addOption('inspectors', saved.inspector);
+          store.addOption('attendees', saved.attendees);
+          store.addOption('locations', saved.location);
+          renderOptions();
+        }
         renderResult(saved);
         switchTab(saved.date.slice(0, 7) === currentMonth() ? 'current' : 'past');
         renderTables();
@@ -618,7 +883,52 @@
     compressImage(file, setPreview);
   });
 
-  els.removePhoto.addEventListener('click', function () { setPreview(''); });
+  els.removePhoto.addEventListener('click', function () {
+    setPreview('');
+    els.analyzeNotice.hidden = true;
+  });
+
+  /* 사진으로 지적사항 초안 작성 (서버에 API 키가 설정된 경우에만 노출) */
+  function showNotice(message, tone) {
+    els.analyzeNotice.textContent = message;
+    els.analyzeNotice.dataset.tone = tone || 'info';
+    els.analyzeNotice.hidden = false;
+  }
+
+  els.analyzeBtn.addEventListener('click', function () {
+    if (!pendingPhoto) return showNotice('먼저 사진을 첨부해 주세요.', 'warn');
+
+    els.analyzeBtn.disabled = true;
+    els.analyzeBtn.textContent = '분석 중…';
+    showNotice('사진을 분석하고 있습니다. 10초 정도 걸립니다.', 'info');
+
+    request(new URL('api/analyze', document.baseURI).href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photo: pendingPhoto, hint: els.issue.value.trim() })
+    })
+      .then(function (data) {
+        var result = data.result || {};
+        if (result.category) els.category.value = result.category;
+        if (result.issue) els.issue.value = result.issue;
+
+        var confidence = { high: '확실', medium: '보통', low: '낮음' }[result.confidence] || '보통';
+        var found = (result.findings || []).join(' / ');
+        showNotice(
+          'AI가 작성한 초안입니다(확신도 ' + confidence + '). 반드시 현장 확인 후 수정해 주세요.' +
+          (found ? '\n확인된 위험요인: ' + found : ''),
+          result.confidence === 'low' ? 'warn' : 'info'
+        );
+        els.issue.focus();
+      })
+      .catch(function (err) {
+        showNotice(err.message, 'error');
+      })
+      .then(function () {
+        els.analyzeBtn.disabled = false;
+        els.analyzeBtn.textContent = '사진으로 초안 작성';
+      });
+  });
 
   els.sampleBtn.addEventListener('click', function () {
     clearError();
@@ -740,5 +1050,15 @@
 
   /* --------------------------------------------------------------- 초기화 */
   els.date.value = todayISO();
-  store.init().then(renderTables);
+  store.init()
+    .then(function () { return store.loadOptions(); })
+    .then(function () {
+      renderOptions();
+      renderTables();
+    })
+    .catch(function (err) {
+      console.error(err);
+      renderOptions();
+      renderTables();
+    });
 })();
