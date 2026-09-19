@@ -59,6 +59,35 @@
   };
 
   var STATUSES = ['완료', '진행중', '보류'];
+  var MAIL_TO = 'pjchoi@swen.co.kr';
+  var ACTION_STAGES = [
+    { key: 'immediate', label: '즉시 조치' },
+    { key: 'short', label: '단기 조치' },
+    { key: 'long', label: '중장기 조치' }
+  ];
+
+  /** 서버가 없을 때 쓰는 기본 명단·장소 (서버 모드에서는 서버 값으로 대체된다) */
+  var DEFAULT_STAFF = [
+    { dept: '안전관리실', name: '최필재' },
+    { dept: '경영지원팀', name: '최혜림' },
+    { dept: '생산관리팀', name: '김진열' }, { dept: '생산관리팀', name: '김성효' },
+    { dept: '생산관리팀', name: '박동진' }, { dept: '생산관리팀', name: '정상채' },
+    { dept: '생산관리팀', name: '김주형' }, { dept: '생산관리팀', name: '천진영' },
+    { dept: '생산관리팀', name: '정재일' }, { dept: '생산관리팀', name: '김대창' },
+    { dept: '2공장 관리팀', name: '권상희' }, { dept: '2공장 관리팀', name: '김민지' },
+    { dept: '2공장 관리팀', name: '이동윤' }, { dept: '2공장 관리팀', name: '정현수' },
+    { dept: '연구개발팀', name: '김현우' }, { dept: '연구개발팀', name: '서동한' },
+    { dept: '연구개발팀', name: '최혜민' }, { dept: '연구개발팀', name: '김기현' },
+    { dept: '연구개발팀', name: '박동일' }, { dept: '연구개발팀', name: '윤경진' }
+  ];
+  var DEFAULT_SITES = [
+    { factory: '1공장', building: 'A동', area: '성형반' },
+    { factory: '1공장', building: 'B동', area: '' },
+    { factory: '2공장', building: '', area: '' },
+    { factory: '3공장', building: 'A동', area: '' },
+    { factory: '3공장', building: 'B동', area: '' },
+    { factory: '3공장', building: 'C동', area: '' }
+  ];
 
   /** 서버가 없을 때(정적 배포) 쓰는 기본 선택 목록. 서버 모드에서는 서버 값으로 대체된다. */
   function defaultOptions() {
@@ -66,6 +95,8 @@
       inspectors: [],
       attendees: [],
       locations: [],
+      staff: DEFAULT_STAFF.slice(),
+      sites: DEFAULT_SITES.slice(),
       categories: Object.keys(RISK_DB).map(function (key) {
         return {
           key: key,
@@ -116,9 +147,25 @@
     loginPassword: $('loginPassword'),
     loginError: $('loginError'),
     loginSubmit: $('loginSubmit'),
-    inspectorList: $('inspectorList'),
-    attendeeList: $('attendeeList'),
-    locationList: $('locationList'),
+    siteFactory: $('siteFactory'),
+    siteBuilding: $('siteBuilding'),
+    siteArea: $('siteArea'),
+    addStaffBtn: $('addStaffBtn'),
+    staffForm: $('staffForm'),
+    newStaffDept: $('newStaffDept'),
+    newStaffName: $('newStaffName'),
+    staffError: $('staffError'),
+    saveStaffBtn: $('saveStaffBtn'),
+    cancelStaffBtn: $('cancelStaffBtn'),
+    addSiteBtn: $('addSiteBtn'),
+    siteForm: $('siteForm'),
+    newSiteFactory: $('newSiteFactory'),
+    newSiteBuilding: $('newSiteBuilding'),
+    newSiteArea: $('newSiteArea'),
+    siteError: $('siteError'),
+    saveSiteBtn: $('saveSiteBtn'),
+    cancelSiteBtn: $('cancelSiteBtn'),
+    mailBtn: $('mailBtn'),
     addCategoryBtn: $('addCategoryBtn'),
     categoryForm: $('categoryForm'),
     newCatLabel: $('newCatLabel'),
@@ -354,6 +401,8 @@
         inspectors: Array.isArray(parsed.inspectors) ? parsed.inspectors : base.inspectors,
         attendees: Array.isArray(parsed.attendees) ? parsed.attendees : base.attendees,
         locations: Array.isArray(parsed.locations) ? parsed.locations : base.locations,
+        staff: Array.isArray(parsed.staff) && parsed.staff.length ? parsed.staff : base.staff,
+        sites: Array.isArray(parsed.sites) && parsed.sites.length ? parsed.sites : base.sites,
         categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : base.categories
       };
     } catch (err) {
@@ -398,6 +447,55 @@
     return Promise.resolve();
   };
 
+  store.addStaff = function (member) {
+    if (store.mode === 'server') {
+      return request(OPTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: 'staff', dept: member.dept, name: member.name })
+      }).then(function (data) { store.options = data.options; });
+    }
+    if (store.options.staff.some(function (m) { return m.name === member.name && m.dept === member.dept; })) {
+      return Promise.reject(new Error('이미 있는 담당자입니다.'));
+    }
+    store.options.staff.push(member);
+    writeLocalOptions();
+    return Promise.resolve();
+  };
+
+  store.addSite = function (site) {
+    if (store.mode === 'server') {
+      return request(OPTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ group: 'sites' }, site))
+      }).then(function (data) { store.options = data.options; });
+    }
+    if (store.options.sites.some(function (v) {
+      return v.factory === site.factory && v.building === site.building && v.area === site.area;
+    })) {
+      return Promise.reject(new Error('이미 있는 장소입니다.'));
+    }
+    store.options.sites.push(site);
+    writeLocalOptions();
+    return Promise.resolve();
+  };
+
+  store.setChecks = function (id, checks) {
+    var rec = store.find(id);
+    if (!rec) return Promise.reject(new Error('기록을 찾을 수 없습니다.'));
+    rec.checks = checks;
+    if (store.mode === 'server') {
+      return api('/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checks: checks })
+      });
+    }
+    writeLocal();
+    return Promise.resolve();
+  };
+
   store.addCategory = function (category) {
     if (store.mode === 'server') {
       return request(OPTIONS_URL, {
@@ -435,6 +533,12 @@
         return Promise.reject(new Error('위험 유형은 최소 한 개는 남아 있어야 합니다.'));
       }
       store.options.categories = store.options.categories.filter(function (c) { return c.key !== value; });
+    } else if (group === 'staff') {
+      store.options.staff = store.options.staff.filter(function (m) { return m.dept + '|' + m.name !== value; });
+    } else if (group === 'sites') {
+      store.options.sites = store.options.sites.filter(function (v) {
+        return v.factory + '|' + v.building + '|' + v.area !== value;
+      });
     } else {
       store.options[group] = store.options[group].filter(function (v) { return v !== value; });
     }
@@ -559,8 +663,74 @@
   }
 
   /* ------------------------------------------------------------- 결과 렌더 */
+  var shownRecordId = '';   // 현재 결과 화면에 띄워 둔 기록
+
+  function lawTableHTML(db) {
+    if (!db.laws || !db.laws.length) return '';
+    return '<div class="result-card result-card--wide">' +
+      '<h3>주요 적용 법령 및 처벌 규정</h3>' +
+      '<div class="table-scroll law-scroll"><table class="law-table">' +
+        '<thead><tr>' +
+          '<th scope="col">관련 법령</th><th scope="col">조항</th>' +
+          '<th scope="col">의무 사항</th><th scope="col">위반 시 처벌·행정처분</th>' +
+        '</tr></thead><tbody>' +
+        db.laws.map(function (l) {
+          return '<tr>' +
+            '<td data-label="법령">' + escapeHTML(l.law) + '</td>' +
+            '<td data-label="조항">' + escapeHTML(l.article) + '</td>' +
+            '<td data-label="의무">' + escapeHTML(l.duty) + '</td>' +
+            '<td data-label="처벌" class="law-penalty">' + escapeHTML(l.penalty) + '</td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody></table></div>' +
+      '<p class="law-note">위 처벌 규정은 현행법 기준이며, 위반 횟수 및 고의성에 따라 가중될 수 있습니다. ' +
+      '출처: <a href="https://www.law.go.kr/main.html" target="_blank" rel="noopener">국가법령정보센터</a></p>' +
+    '</div>';
+  }
+
+  /** 단계별 개선조치 체크리스트. 체크 상태는 기록에 저장된다. */
+  function actionListHTML(db, rec) {
+    var actions = db.actions || {};
+    var checks = (rec && rec.checks) || {};
+    var stages = ACTION_STAGES.filter(function (st) {
+      return Array.isArray(actions[st.key]) && actions[st.key].length;
+    });
+
+    if (!stages.length) {
+      // 단계 정보가 없는 유형은 기존 가이드를 그대로 보여 준다.
+      return '<div class="result-card result-card--action result-card--wide">' +
+        '<h3>개선 조치 가이드</h3><ol>' +
+        (db.guide || []).map(function (g) { return '<li>' + escapeHTML(g) + '</li>'; }).join('') +
+        '</ol></div>';
+    }
+
+    var done = 0, total = 0;
+    var body = stages.map(function (st) {
+      return '<div class="stage stage--' + st.key + '">' +
+        '<p class="stage__title">[' + st.label + ']</p>' +
+        actions[st.key].map(function (text, i) {
+          var id = st.key + '-' + i;
+          var checked = Boolean(checks[id]);
+          total++; if (checked) done++;
+          return '<label class="stage__item' + (checked ? ' is-done' : '') + '">' +
+            '<input type="checkbox" data-check="' + id + '"' + (checked ? ' checked' : '') +
+            (rec ? '' : ' disabled') + '>' +
+            '<span>' + escapeHTML(text) + '</span></label>';
+        }).join('') +
+      '</div>';
+    }).join('');
+
+    return '<div class="result-card result-card--action result-card--wide" id="actionCard">' +
+      '<h3>단계별 개선조치 <span class="stage__count" id="checkCount">' + done + ' / ' + total + ' 완료</span></h3>' +
+      body +
+      (rec ? '' : '<p class="law-note">기록을 등록하면 조치 완료를 체크할 수 있습니다.</p>') +
+    '</div>';
+  }
+
   function renderResult(rec) {
     var db = categoryInfo(rec);
+    shownRecordId = rec.id || '';
+
     var photoHTML = rec.photo
       ? '<div class="result-card result-card--photo result-card--wide">' +
           '<h3>현장 사진</h3>' +
@@ -568,9 +738,7 @@
         '</div>'
       : '';
 
-    var guideHTML = db.guide.map(function (g) {
-      return '<li>' + escapeHTML(g) + '</li>';
-    }).join('');
+    var penalty = rec.penalty || db.penalty || '';
 
     els.resultArea.innerHTML =
       '<div class="result-meta">' +
@@ -586,16 +754,113 @@
         '</div>' +
         '<div class="result-card result-card--law">' +
           '<h3>관련 법조항</h3>' +
-          '<p><strong>' + escapeHTML(db.law) + '</strong></p>' +
+          '<p><strong>' + escapeHTML(rec.law || db.law) + '</strong></p>' +
           '<p style="margin-top:6px">' + escapeHTML(db.summary) + '</p>' +
+          (penalty ? '<p class="penalty"><span class="penalty__tag">위반 시</span>' + escapeHTML(penalty) + '</p>' : '') +
         '</div>' +
         photoHTML +
-        '<div class="result-card result-card--action result-card--wide">' +
-          '<h3>개선 조치 가이드</h3>' +
-          '<ol>' + guideHTML + '</ol>' +
-        '</div>' +
+        lawTableHTML(db) +
+        actionListHTML(db, rec.id ? rec : null) +
       '</div>';
+
+    els.mailBtn.disabled = !rec.id;
   }
+
+  /* 조치 체크박스 → 기록에 저장 */
+  els.resultArea.addEventListener('change', function (e) {
+    var box = e.target.closest && e.target.closest('[data-check]');
+    if (!box || !shownRecordId) return;
+    var rec = store.find(shownRecordId);
+    if (!rec) return;
+
+    var checks = Object.assign({}, rec.checks || {});
+    checks[box.getAttribute('data-check')] = box.checked;
+    box.closest('.stage__item').classList.toggle('is-done', box.checked);
+    updateCheckCount();
+
+    store.setChecks(shownRecordId, checks).catch(function (err) {
+      box.checked = !box.checked;
+      box.closest('.stage__item').classList.toggle('is-done', box.checked);
+      updateCheckCount();
+      reportError(err);
+    });
+  });
+
+  function updateCheckCount() {
+    var counter = document.getElementById('checkCount');
+    if (!counter) return;
+    var boxes = els.resultArea.querySelectorAll('[data-check]');
+    var done = els.resultArea.querySelectorAll('[data-check]:checked').length;
+    counter.textContent = done + ' / ' + boxes.length + ' 완료';
+  }
+
+  /* ------------------------------------------------------------- 메일 송부 */
+  function buildMailBody(rec, db) {
+    var lines = [
+      '안전보건 순회점검 보고서',
+      '',
+      '점검일자 : ' + formatDate(rec.date),
+      '점검 장소 : ' + rec.location,
+      '점검 담당자 : ' + rec.inspector,
+      '입회자 : ' + rec.attendees,
+      '위험 유형 : ' + db.label,
+      '',
+      '[현장 지적사항]',
+      rec.issue,
+      '',
+      '[관련 법조항]',
+      rec.law || db.law,
+      db.summary
+    ];
+
+    var penalty = rec.penalty || db.penalty;
+    if (penalty) lines.push('위반 시 : ' + penalty);
+
+    if (db.laws && db.laws.length) {
+      lines.push('', '[주요 적용 법령 및 처벌 규정]');
+      db.laws.forEach(function (l) {
+        lines.push('- ' + l.law + ' ' + l.article + ' : ' + l.duty + ' -> ' + l.penalty);
+      });
+    }
+
+    var checks = rec.checks || {};
+    var actions = db.actions || {};
+    if (ACTION_STAGES.some(function (st) { return (actions[st.key] || []).length; })) {
+      lines.push('', '[단계별 개선조치]');
+      ACTION_STAGES.forEach(function (st) {
+        (actions[st.key] || []).forEach(function (text, i) {
+          lines.push('  [' + (checks[st.key + '-' + i] ? 'V' : ' ') + '] (' + st.label + ') ' + text);
+        });
+      });
+    }
+
+    lines.push('', '조치 상태 : ' + rec.status);
+    if (rec.action) lines.push('조치 내용 : ' + rec.action);
+    if (rec.photo) lines.push('', '※ 현장 사진은 시스템에 등록되어 있습니다. 필요 시 화면에서 인쇄(PDF)하여 첨부해 주세요.');
+
+    return lines.join('\n');
+  }
+
+  els.mailBtn.addEventListener('click', function () {
+    var rec = store.find(shownRecordId);
+    if (!rec) return;
+    var db = categoryInfo(rec);
+    var subject = '[안전보건 순회점검] ' + formatDate(rec.date) + ' ' + rec.location + ' - ' + db.label;
+    var href = 'mailto:' + MAIL_TO +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(buildMailBody(rec, db));
+
+    // location 대입 대신 링크 클릭 — 팝업 차단 영향을 받지 않는다.
+    var link = document.getElementById('mailLink');
+    if (!link) {
+      link = document.createElement('a');
+      link.id = 'mailLink';
+      link.hidden = true;
+      document.body.appendChild(link);
+    }
+    link.href = href;
+    link.click();
+  });
 
   /* -------------------------------------------------------------- 표 렌더 */
   function rowHTML(rec) {
@@ -616,7 +881,9 @@
             '<span class="cell-main">' + escapeHTML(rec.inspector) + '</span>' +
             '<span class="cell-sub">' + escapeHTML(rec.attendees) + '</span></span></td>' +
         '<td data-label="위험유형"><span class="cell-body">' + escapeHTML(db.label) + '</span></td>' +
-        '<td data-label="법조항"><span class="cell-body">' + escapeHTML(db.lawShort) + '</span></td>' +
+        '<td data-label="법조항"><span class="cell-body">' + escapeHTML(rec.lawShort || db.lawShort) + '</span></td>' +
+        '<td data-label="과태료"><span class="cell-body cell-penalty">' +
+            escapeHTML(rec.penalty || db.penalty || '-') + '</span></td>' +
         '<td data-label="조치상태"><span class="cell-body">' +
             '<label class="sr-only" for="st-' + escapeHTML(rec.id) + '">조치상태</label>' +
             '<select class="status-select" id="st-' + escapeHTML(rec.id) + '" data-status="' + rec.status + '" data-action="status">' +
@@ -635,7 +902,7 @@
   }
 
   function emptyRow(msg) {
-    return '<tr class="row-empty"><td colspan="7">' + msg + '</td></tr>';
+    return '<tr class="row-empty"><td colspan="8">' + msg + '</td></tr>';
   }
 
   function sortByDateDesc(a, b) {
@@ -686,16 +953,92 @@
   }
 
   /* --------------------------------------------------- 선택 목록 화면 반영 */
-  function fillDatalist(el, values) {
-    el.innerHTML = values.map(function (v) {
-      return '<option value="' + escapeHTML(v) + '"></option>';
-    }).join('');
+  /** 부서별 optgroup 으로 담당자 셀렉트를 채운다. */
+  function fillStaffSelect(select, placeholder) {
+    var prev = select.value;
+    var byDept = {};
+    var order = [];
+    store.options.staff.forEach(function (m) {
+      if (!byDept[m.dept]) { byDept[m.dept] = []; order.push(m.dept); }
+      byDept[m.dept].push(m.name);
+    });
+    select.innerHTML = '<option value="">' + placeholder + '</option>' +
+      order.map(function (dept) {
+        return '<optgroup label="' + escapeHTML(dept) + '">' +
+          byDept[dept].map(function (name) {
+            return '<option value="' + escapeHTML(name) + '">' + escapeHTML(name) + '</option>';
+          }).join('') + '</optgroup>';
+      }).join('');
+    if (prev && store.options.staff.some(function (m) { return m.name === prev; })) select.value = prev;
   }
 
+  /** 공장 → 동 → 세부구역 3단 선택을 채우고 숨은 location 값을 갱신한다. */
+  function renderSiteSelects() {
+    var sites = store.options.sites;
+    var factories = [];
+    sites.forEach(function (v) { if (factories.indexOf(v.factory) === -1) factories.push(v.factory); });
+
+    var prevFactory = els.siteFactory.value;
+    els.siteFactory.innerHTML = '<option value="">공장 선택</option>' + factories.map(function (f) {
+      return '<option value="' + escapeHTML(f) + '">' + escapeHTML(f) + '</option>';
+    }).join('');
+    if (factories.indexOf(prevFactory) !== -1) els.siteFactory.value = prevFactory;
+
+    renderBuildingSelect();
+  }
+
+  function renderBuildingSelect() {
+    var factory = els.siteFactory.value;
+    var buildings = [];
+    store.options.sites.forEach(function (v) {
+      if (v.factory === factory && v.building && buildings.indexOf(v.building) === -1) buildings.push(v.building);
+    });
+
+    var prev = els.siteBuilding.value;
+    els.siteBuilding.disabled = !buildings.length;
+    els.siteBuilding.innerHTML = buildings.length
+      ? '<option value="">동 선택</option>' + buildings.map(function (b) {
+          return '<option value="' + escapeHTML(b) + '">' + escapeHTML(b) + '</option>';
+        }).join('')
+      : '<option value="">동 없음</option>';
+    if (buildings.indexOf(prev) !== -1) els.siteBuilding.value = prev;
+
+    renderAreaSelect();
+  }
+
+  function renderAreaSelect() {
+    var factory = els.siteFactory.value;
+    var building = els.siteBuilding.value;
+    var areas = [];
+    store.options.sites.forEach(function (v) {
+      if (v.factory === factory && v.building === building && v.area && areas.indexOf(v.area) === -1) areas.push(v.area);
+    });
+
+    var prev = els.siteArea.value;
+    els.siteArea.disabled = !areas.length;
+    els.siteArea.innerHTML = areas.length
+      ? '<option value="">구역 전체</option>' + areas.map(function (a) {
+          return '<option value="' + escapeHTML(a) + '">' + escapeHTML(a) + '</option>';
+        }).join('')
+      : '<option value="">세부 구역 없음</option>';
+    if (areas.indexOf(prev) !== -1) els.siteArea.value = prev;
+
+    syncLocation();
+  }
+
+  function syncLocation() {
+    els.location.value = [els.siteFactory.value, els.siteBuilding.value, els.siteArea.value]
+      .filter(Boolean).join(' ');
+  }
+
+  els.siteFactory.addEventListener('change', renderBuildingSelect);
+  els.siteBuilding.addEventListener('change', renderAreaSelect);
+  els.siteArea.addEventListener('change', syncLocation);
+
   function renderOptions() {
-    fillDatalist(els.inspectorList, store.options.inspectors);
-    fillDatalist(els.attendeeList, store.options.attendees);
-    fillDatalist(els.locationList, store.options.locations);
+    fillStaffSelect(els.inspector, '담당자 선택');
+    fillStaffSelect(els.attendees, '입회자 선택');
+    renderSiteSelects();
 
     var prev = els.category.value;
     els.category.innerHTML = '<option value="">위험 유형을 선택하세요</option>' +
@@ -713,9 +1056,23 @@
     Array.prototype.forEach.call(groups, function (box) {
       var group = box.getAttribute('data-group');
       var list = box.querySelector('.chips__list');
-      var items = group === 'categories'
-        ? store.options.categories.map(function (c) { return { value: c.key, label: c.label }; })
-        : store.options[group].map(function (v) { return { value: v, label: v }; });
+      var items;
+      if (group === 'categories') {
+        items = store.options.categories.map(function (c) { return { value: c.key, label: c.label }; });
+      } else if (group === 'staff') {
+        items = store.options.staff.map(function (m) {
+          return { value: m.dept + '|' + m.name, label: m.name + ' (' + m.dept + ')' };
+        });
+      } else if (group === 'sites') {
+        items = store.options.sites.map(function (v) {
+          return {
+            value: v.factory + '|' + v.building + '|' + v.area,
+            label: [v.factory, v.building, v.area].filter(Boolean).join(' ')
+          };
+        });
+      } else {
+        items = store.options[group].map(function (v) { return { value: v, label: v }; });
+      }
 
       list.innerHTML = items.length
         ? items.map(function (item) {
@@ -738,6 +1095,89 @@
     store.removeOption(group, value)
       .then(renderOptions)
       .catch(function (err) { btn.disabled = false; reportError(err); });
+  });
+
+  /* 담당자 명단 추가 */
+  els.addStaffBtn.addEventListener('click', function () {
+    var opening = els.staffForm.hidden;
+    els.staffForm.hidden = !opening;
+    els.staffError.hidden = true;
+    if (opening) els.newStaffName.focus();
+  });
+
+  els.cancelStaffBtn.addEventListener('click', function () {
+    els.staffForm.hidden = true;
+    els.staffError.hidden = true;
+  });
+
+  els.saveStaffBtn.addEventListener('click', function () {
+    var name = els.newStaffName.value.trim();
+    if (!name) {
+      els.staffError.textContent = '이름을 입력해 주세요.';
+      els.staffError.hidden = false;
+      els.newStaffName.focus();
+      return;
+    }
+    els.saveStaffBtn.disabled = true;
+    store.addStaff({ dept: els.newStaffDept.value.trim() || '기타', name: name })
+      .then(function () {
+        renderOptions();
+        els.inspector.value = name;
+        els.staffForm.hidden = true;
+        els.newStaffDept.value = '';
+        els.newStaffName.value = '';
+      })
+      .catch(function (err) {
+        els.staffError.textContent = err.message;
+        els.staffError.hidden = false;
+      })
+      .then(function () { els.saveStaffBtn.disabled = false; });
+  });
+
+  /* 점검 장소 추가 */
+  els.addSiteBtn.addEventListener('click', function () {
+    var opening = els.siteForm.hidden;
+    els.siteForm.hidden = !opening;
+    els.siteError.hidden = true;
+    if (opening) els.newSiteFactory.focus();
+  });
+
+  els.cancelSiteBtn.addEventListener('click', function () {
+    els.siteForm.hidden = true;
+    els.siteError.hidden = true;
+  });
+
+  els.saveSiteBtn.addEventListener('click', function () {
+    var factory = els.newSiteFactory.value.trim();
+    if (!factory) {
+      els.siteError.textContent = '공장을 입력해 주세요.';
+      els.siteError.hidden = false;
+      els.newSiteFactory.focus();
+      return;
+    }
+    var site = {
+      factory: factory,
+      building: els.newSiteBuilding.value.trim(),
+      area: els.newSiteArea.value.trim()
+    };
+    els.saveSiteBtn.disabled = true;
+    store.addSite(site)
+      .then(function () {
+        renderOptions();
+        els.siteFactory.value = site.factory;
+        renderBuildingSelect();
+        if (site.building) { els.siteBuilding.value = site.building; renderAreaSelect(); }
+        if (site.area) { els.siteArea.value = site.area; syncLocation(); }
+        els.siteForm.hidden = true;
+        els.newSiteFactory.value = '';
+        els.newSiteBuilding.value = '';
+        els.newSiteArea.value = '';
+      })
+      .catch(function (err) {
+        els.siteError.textContent = err.message;
+        els.siteError.hidden = false;
+      })
+      .then(function () { els.saveSiteBtn.disabled = false; });
   });
 
   /* 새 위험 유형 추가 */
@@ -819,15 +1259,15 @@
   function validate() {
     var checks = [
       [els.date, '점검일자를 입력해 주세요.'],
-      [els.inspector, '점검 담당자를 입력해 주세요.'],
-      [els.attendees, '입회자를 입력해 주세요.'],
-      [els.location, '점검 장소를 입력해 주세요.'],
+      [els.inspector, '점검 담당자를 선택해 주세요.'],
+      [els.attendees, '입회자를 선택해 주세요.'],
+      [els.location, '점검 장소를 선택해 주세요.', els.siteFactory],
       [els.category, '위험 유형을 선택해 주세요.'],
       [els.issue, '현장 지적사항을 입력해 주세요.']
     ];
     for (var i = 0; i < checks.length; i++) {
       if (!checks[i][0].value.trim()) {
-        showError(checks[i][1], checks[i][0]);
+        showError(checks[i][1], checks[i][2] || checks[i][0]);
         return false;
       }
     }
@@ -877,6 +1317,7 @@
         els.issue.value = '';
         els.completeCheck.checked = false;
         setPreview('');
+        els.analyzeNotice.hidden = true;
         els.resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
       .catch(reportError)
@@ -942,9 +1383,14 @@
   els.sampleBtn.addEventListener('click', function () {
     clearError();
     els.date.value = todayISO();
-    els.inspector.value = '최필재 부장';
-    els.attendees.value = '생산팀장';
-    els.location.value = '제1공장 프레스 2호기';
+    els.inspector.value = '최필재';
+    els.attendees.value = '김진열';
+    els.siteFactory.value = '1공장';
+    renderBuildingSelect();
+    els.siteBuilding.value = 'A동';
+    renderAreaSelect();
+    els.siteArea.value = '성형반';
+    syncLocation();
     els.category.value = 'machine';
     els.issue.value = '프레스 광전자식 방호장치가 고장 난 상태로 작업이 진행되고 있음';
     els.completeCheck.checked = true;
@@ -981,6 +1427,17 @@
     });
 
     tbody.addEventListener('click', function (e) {
+      var open = e.target.closest && e.target.closest('.cell-main');
+      if (open) {
+        var row = open.closest('tr');
+        var rec = store.find(row.getAttribute('data-id'));
+        if (rec) {
+          renderResult(rec);
+          els.resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return;
+      }
+
       var btn = e.target.closest && e.target.closest('[data-action="delete"]');
       if (!btn) return;
       var row = btn.closest('tr');

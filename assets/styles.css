@@ -676,24 +676,214 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
   .data-table td { grid-template-columns: 1fr; gap: 2px; }
 }
 
+
+/* --------------------------------------------------------------- 결재란 */
+.approval { display: none; }             /* 화면에서는 숨기고 인쇄할 때만 노출 */
+.approval__table { border-collapse: collapse; }
+.approval__table th,
+.approval__table td { border: 1px solid #333; text-align: center; font-size: 10pt; }
+.approval__table th { padding: 3mm 4mm; background: #f2f2f2; font-weight: 600; }
+.approval__label { width: 10mm; padding: 0 !important; }
+.approval__sign { height: 16mm; width: 28mm; }
+
+/* ------------------------------------------------------- 점검 장소 3단 */
+.site-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.site-row select:disabled { background: var(--c-surface-alt); color: var(--c-text-mute); }
+
+@media (max-width: 400px) {
+  .site-row { grid-template-columns: 1fr; }
+}
+
+/* --------------------------------------------------------- 과태료 표기 */
+.penalty {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed #e0b9b9;
+  font-size: 13.5px; font-weight: 600; color: var(--c-danger);
+}
+.penalty__tag {
+  flex: none;
+  padding: 1px 6px;
+  font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--c-danger); border-radius: 2px;
+}
+.cell-penalty { color: var(--c-danger); font-weight: 600; }
+
+/* ------------------------------------------------- 법령 및 처벌 규정 표 */
+.law-scroll { margin-top: 4px; }
+.law-table {
+  width: 100%; min-width: 520px;
+  border-collapse: collapse; font-size: 12.5px; text-align: left;
+}
+.law-table th {
+  padding: 8px 9px; white-space: nowrap;
+  color: var(--c-navy); background: var(--c-surface-alt);
+  border-bottom: 1px solid var(--c-line-strong);
+}
+.law-table td { padding: 8px 9px; vertical-align: top; border-bottom: 1px solid var(--c-line); }
+.law-table tbody tr:last-child td { border-bottom: none; }
+.law-penalty { color: var(--c-danger); font-weight: 600; }
+.law-note { margin-top: 8px; font-size: 11.5px; color: var(--c-text-sub); }
+.law-note a { color: var(--c-primary); }
+
+@media (max-width: 767px) {
+  .law-scroll { overflow: visible; }
+  .law-table { min-width: 0; display: block; }
+  .law-table thead { display: none; }
+  .law-table tbody, .law-table tr, .law-table td { display: block; width: 100%; }
+  .law-table tr {
+    padding: 9px 0; border-bottom: 1px solid var(--c-line);
+  }
+  .law-table tbody tr:last-child { border-bottom: none; }
+  .law-table td {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px; padding: 3px 0; border: none;
+    /* 한글 keep-all 때문에 긴 어절이 셀을 넘치는 것을 막는다 */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .law-table td::before {
+    content: attr(data-label);
+    font-size: 11.5px; font-weight: 600; color: var(--c-text-sub);
+  }
+}
+
+/* ------------------------------------------------- 단계별 개선조치 체크 */
+.stage + .stage { margin-top: 12px; }
+.stage__title {
+  margin-bottom: 6px;
+  font-size: 12.5px; font-weight: 700;
+}
+.stage--immediate .stage__title { color: var(--c-danger); }
+.stage--short .stage__title { color: var(--c-warn); }
+.stage--long .stage__title { color: var(--c-success); }
+
+.stage__count {
+  float: right;
+  font-size: 11.5px; font-weight: 600; color: var(--c-text-sub);
+  text-transform: none; letter-spacing: 0;
+}
+
+.stage__item {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 7px 8px;
+  font-size: 13.5px; font-weight: 400; color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.stage__item + .stage__item { margin-top: 5px; }
+.stage__item:hover { border-color: var(--c-line-strong); }
+.stage__item input[type="checkbox"] {
+  width: 18px; height: 18px; flex: none; margin: 1px 0 0;
+  accent-color: var(--c-success); cursor: pointer;
+}
+.stage__item.is-done { background: var(--c-success-bg); border-color: #bcdcc8; }
+.stage__item.is-done span { color: var(--c-success); text-decoration: line-through; }
+.stage__item input:disabled { cursor: default; }
+.stage__item:has(input:disabled) { cursor: default; opacity: .75; }
+
+@media (max-width: 767px) {
+  .stage__item { padding: 10px; font-size: 14px; }
+  .stage__item input[type="checkbox"] { width: 20px; height: 20px; }
+}
+
 /* ------------------------------------------------------------------ 인쇄 */
 @media print {
-  body { background: #fff; font-size: 11pt; }
-  .gov-bar, .site-footer, .skip-link, .conn,
-  .tabs, .filter-row, .scroll-hint,
-  .btn, .btn-del, .col-manage, .data-table td.col-manage,
-  .panel__hint { display: none !important; }
+  /* A4 세로, 여백을 좁혀 내용이 한 장에 들어가도록 한다 */
+  @page { size: A4 portrait; margin: 12mm 10mm; }
 
-  .site-header { border-bottom: 2px solid #000; }
+  html, body {
+    width: 100%;
+    background: #fff;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .gov-bar, .site-footer, .skip-link, .conn, .login,
+  .tabs, .filter-row, .scroll-hint, .manage, .notice,
+  .btn, .btn-del, .col-manage, .data-table td.col-manage,
+  .panel__hint, .head-actions, .site-header__note { display: none !important; }
+
+  /* 결재란: 인쇄물 우측 상단 */
+  .approval { display: block; margin: 0 0 4mm; }
+  .approval__table { margin-left: auto; }
+
+  .site-header { padding: 0; border-bottom: 1.5pt solid #000; }
+  .site-header__inner { padding: 0 0 3mm; }
+  .brand__mark { display: none; }
+  .brand__title { font-size: 15pt; }
+  .brand__sub { font-size: 7pt; }
+
+  .wrap { max-width: none; padding: 0; }
   .layout { display: block; padding: 0; }
-  .panel { border: none; break-inside: avoid; margin-bottom: 14px; }
-  .panel__head { padding: 8px 0; border-bottom: 1.5px solid #000; }
-  .panel__body { padding: 8px 0; }
+  .stack { display: block; }
+
+  .panel {
+    border: none;
+    margin: 0 0 4mm;
+    break-inside: auto;
+  }
+  .panel__head { padding: 2mm 0; border-bottom: 1pt solid #000; }
+  .panel__title { font-size: 11pt; padding-left: 0; border-left: none; }
+  .panel__body { padding: 2mm 0; }
+
+  /* 결과 카드: 두 칸 유지하되 카드가 페이지 경계에서 잘리지 않게 */
+  .result-grid { display: block; }
+  .result-card {
+    break-inside: avoid;
+    margin-bottom: 2.5mm;
+    padding: 2.5mm 3mm;
+    background: #fff !important;
+    border: 0.75pt solid #999;
+  }
+  .result-card h3 { font-size: 8.5pt; margin-bottom: 1mm; }
+  .result-card p, .result-card ol { font-size: 9pt; }
+  .result-meta { font-size: 9pt; padding-bottom: 2mm; margin-bottom: 2mm; }
+
+  /* 사진이 페이지를 넘기지 않도록 높이를 제한 */
+  .result-card img { max-height: 70mm; width: auto; max-width: 100%; }
+
+  .stage__item {
+    break-inside: avoid;
+    padding: 1mm 2mm; font-size: 9pt;
+    border: 0.5pt solid #bbb; background: #fff !important;
+  }
+  .stage__item.is-done span { text-decoration: none; }
+  .stage__item.is-done span::before { content: "[완료] "; font-weight: 700; }
+  .stage__item input[type="checkbox"] { width: 3.5mm; height: 3.5mm; }
+
+  /* 표: 축소하지 않고 폭에 맞춰 줄바꿈 */
   .table-scroll { overflow: visible; border: none; }
-  .data-table { min-width: 0; }
-  .data-table th, .data-table td { border: 1px solid #999; }
-  .result-card { border: 1px solid #999; background: #fff !important; }
-  .status-select, .action-input { border: none; background: none; padding: 0; }
+  .data-table, .law-table {
+    min-width: 0; width: 100%;
+    display: table; font-size: 8.5pt;
+    table-layout: fixed;
+  }
+  .data-table thead, .law-table thead { display: table-header-group; }
+  .data-table tbody, .law-table tbody { display: table-row-group; }
+  .data-table tr, .law-table tr { display: table-row; break-inside: avoid; }
+  .data-table td, .data-table th,
+  .law-table td, .law-table th {
+    display: table-cell;
+    padding: 1.2mm 1.5mm;
+    border: 0.5pt solid #999;
+    word-break: break-all;
+  }
+  .data-table td::before, .law-table td::before { content: none; }
+  .data-table tr { margin: 0; border-left: none; }
+  .thumb { width: 12mm; height: 12mm; }
+
+  .status-select, .action-input {
+    border: none; background: none; padding: 0;
+    font-size: 8.5pt; appearance: none;
+  }
+  .stats { display: table; width: 100%; margin-bottom: 2mm; }
+  .stat { display: table-cell; border: 0.5pt solid #999; padding: 1.5mm; }
+  .stat dd { font-size: 12pt; }
 
   /* 인쇄 대상 격리 */
   body.print-target-result .panel:not(.is-print-target),

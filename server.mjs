@@ -34,43 +34,139 @@ const STATUSES = ['완료', '진행중', '보류'];
 const TEXT_GROUPS = ['inspectors', 'attendees', 'locations'];
 const MAX_OPTIONS = 300;
 
-/** 처음 실행할 때 채워 넣는 기본 위험 유형. 사용자가 추가·삭제할 수 있다. */
+/** 순회점검 담당자·입회자 명단 (연구관리실 제공, 2026-09) */
+const DEFAULT_STAFF = [
+  { dept: '안전관리실', name: '최필재' },
+  { dept: '경영지원팀', name: '최혜림' },
+  { dept: '생산관리팀', name: '김진열' },
+  { dept: '생산관리팀', name: '김성효' },
+  { dept: '생산관리팀', name: '박동진' },
+  { dept: '생산관리팀', name: '정상채' },
+  { dept: '생산관리팀', name: '김주형' },
+  { dept: '생산관리팀', name: '천진영' },
+  { dept: '생산관리팀', name: '정재일' },
+  { dept: '생산관리팀', name: '김대창' },
+  { dept: '2공장 관리팀', name: '권상희' },
+  { dept: '2공장 관리팀', name: '김민지' },
+  { dept: '2공장 관리팀', name: '이동윤' },
+  { dept: '2공장 관리팀', name: '정현수' },
+  { dept: '연구개발팀', name: '김현우' },
+  { dept: '연구개발팀', name: '서동한' },
+  { dept: '연구개발팀', name: '최혜민' },
+  { dept: '연구개발팀', name: '김기현' },
+  { dept: '연구개발팀', name: '박동일' },
+  { dept: '연구개발팀', name: '윤경진' }
+];
+
+/** 점검 장소 = 공장 > 동 > 세부구역 */
+const DEFAULT_SITES = [
+  { factory: '1공장', building: 'A동', area: '성형반' },
+  { factory: '1공장', building: 'B동', area: '' },
+  { factory: '2공장', building: '', area: '' },
+  { factory: '3공장', building: 'A동', area: '' },
+  { factory: '3공장', building: 'B동', area: '' },
+  { factory: '3공장', building: 'C동', area: '' }
+];
+
+/** 처음 실행할 때 채워 넣는 기본 위험 유형.
+ *  laws  : 결과 화면의 "주요 적용 법령 및 처벌 규정" 표 (국가법령정보센터 기준)
+ *  actions: 단계별 개선조치 체크리스트 */
 const DEFAULT_CATEGORIES = [
   {
     key: 'machine', label: '기계·기구',
     law: '산업안전보건법 제38조 / 안전보건규칙 제87조', lawShort: '산안규칙 제87조',
     summary: '위험 기계 가동 중 방호장치를 임의 해제하였거나 정상 작동하지 않는 상태입니다.',
-    guide: ['해당 기계 가동 즉시 중지', '방호장치 점검 및 교체', '관리감독자 확인 후 작업 재개']
+    penalty: '5년 이하 징역 또는 5천만원 이하 벌금',
+    laws: [
+      { law: '산업안전보건법', article: '제38조', duty: '위험 기계·기구에 대한 안전조치', penalty: '5년 이하 징역 또는 5천만원 이하 벌금' },
+      { law: '안전보건규칙', article: '제87조', duty: '원동기·회전축 등의 방호조치', penalty: '1천만원 이하 과태료' }
+    ],
+    guide: ['해당 기계 가동 즉시 중지', '방호장치 점검 및 교체', '관리감독자 확인 후 작업 재개'],
+    actions: {
+      immediate: ['해당 기계 가동 즉시 중지', '전원 차단 및 작업중지 표지 부착'],
+      short: ['방호장치 점검·교체', '관리감독자 확인 후 작업 재개'],
+      long: ['동일 기종 방호장치 일제 점검', '작업자 안전교육 실시']
+    }
   },
   {
     key: 'fall', label: '추락·전도',
     law: '산업안전보건기준에 관한 규칙 제42조', lawShort: '산안규칙 제42조',
     summary: '고소 작업 구간에 안전난간이 설치되지 않았거나 안전대를 체결하지 않은 상태입니다.',
-    guide: ['해당 구간 작업 즉시 중단', '표준 안전난간 설치', '전신형 안전대 체결 상태 확인']
+    penalty: '5년 이하 징역 또는 5천만원 이하 벌금',
+    laws: [
+      { law: '산업안전보건법', article: '제38조', duty: '추락 위험 장소의 안전조치', penalty: '5년 이하 징역 또는 5천만원 이하 벌금' },
+      { law: '안전보건규칙', article: '제42조', duty: '추락 방지 조치 (안전난간·안전대)', penalty: '1천만원 이하 과태료' }
+    ],
+    guide: ['해당 구간 작업 즉시 중단', '표준 안전난간 설치', '전신형 안전대 체결 상태 확인'],
+    actions: {
+      immediate: ['해당 구간 작업 즉시 중단', '출입 통제선 설치'],
+      short: ['표준 안전난간 설치', '전신형 안전대 지급·체결 확인'],
+      long: ['고소작업 구간 전수 점검', '추락 방지 설비 정기점검 계획 수립']
+    }
   },
   {
     key: 'electric', label: '전기설비',
     law: '산업안전보건기준에 관한 규칙 제301조', lawShort: '산안규칙 제301조',
     summary: '배·분전반 충전부가 노출되어 감전 위험이 있는 상태입니다.',
-    guide: ['분전반 주변 정리 및 접근 통제', '절연 덮개 설치', '감전주의 경고표지 부착']
+    penalty: '5년 이하 징역 또는 5천만원 이하 벌금',
+    laws: [
+      { law: '산업안전보건법', article: '제38조', duty: '전기 재해 예방 조치', penalty: '5년 이하 징역 또는 5천만원 이하 벌금' },
+      { law: '안전보건규칙', article: '제301조', duty: '전기 기계·기구의 충전부 방호', penalty: '1천만원 이하 과태료' }
+    ],
+    guide: ['분전반 주변 정리 및 접근 통제', '절연 덮개 설치', '감전주의 경고표지 부착'],
+    actions: {
+      immediate: ['분전반 주변 정리 및 접근 통제', '감전주의 경고표지 부착'],
+      short: ['충전부 절연 덮개 설치', '누전차단기 작동 시험'],
+      long: ['전기설비 정기검사 수검', '접지저항 측정 주기 관리']
+    }
   },
   {
     key: 'chemical', label: '화학물질',
     law: '산업안전보건법 제110조 / 제114조', lawShort: '산안법 제110조',
     summary: 'MSDS 경고표시가 누락되었거나 적합한 보호구를 착용하지 않은 상태입니다.',
-    guide: ['해당 작업 일시 중지', 'MSDS 경고표지 부착 및 게시', '방독마스크 등 보호구 지급·착용']
+    penalty: '500만원 이하 과태료',
+    laws: [
+      { law: '산업안전보건법', article: '제114조', duty: '물질안전보건자료(MSDS)의 비치 및 경고표시', penalty: '500만원 이하 과태료' },
+      { law: '화학물질관리법', article: '제28조', duty: '유해화학물질 영업허가 (제조·사용·보관 등)', penalty: '5년 이하 징역 또는 1억원 이하 벌금 / 영업정지' },
+      { law: '화학물질관리법', article: '제24조', duty: '유해화학물질 취급시설 배치·설치 및 관리기준 준수', penalty: '3년 이하 징역 또는 5천만원 이하 벌금 / 개선명령' }
+    ],
+    guide: ['해당 작업 일시 중지', 'MSDS 경고표지 부착 및 게시', '방독마스크 등 보호구 지급·착용'],
+    actions: {
+      immediate: ['MSDS 현장 비치 및 경고표지 부착', '취급 구역 관계자 외 출입통제'],
+      short: ['유해화학물질 취급자 법정 교육 이수', '국소배기장치 등 환기설비 가동 점검'],
+      long: ['취급시설 정기검사 수검 (안전보건공단/환경공단)', '영업허가 대상 여부 검토']
+    }
   },
   {
     key: 'fire', label: '화재·폭발',
     law: '산업안전보건기준에 관한 규칙 제241조', lawShort: '산안규칙 제241조',
     summary: '인화성 물질 취급 장소에서 화기 작업 중 소화설비가 배치되지 않았습니다.',
-    guide: ['화기 작업 중단', '소화기 배치 및 화재감시인 지정', '화기작업 허가서 재확인']
+    penalty: '5년 이하 징역 또는 5천만원 이하 벌금',
+    laws: [
+      { law: '산업안전보건법', article: '제38조', duty: '화재·폭발 위험 작업의 안전조치', penalty: '5년 이하 징역 또는 5천만원 이하 벌금' },
+      { law: '안전보건규칙', article: '제241조', duty: '화재위험작업 시 화기 관리 및 감시인 배치', penalty: '1천만원 이하 과태료' }
+    ],
+    guide: ['화기 작업 중단', '소화기 배치 및 화재감시인 지정', '화기작업 허가서 재확인'],
+    actions: {
+      immediate: ['화기 작업 중단', '주변 인화성 물질 제거'],
+      short: ['소화기 배치 및 화재감시인 지정', '화기작업 허가서 재발급·확인'],
+      long: ['화기작업 허가 절차 정비', '소방설비 정기점검']
+    }
   },
   {
     key: 'etc', label: '기타',
     law: '산업안전보건법 제5조 (사업주의 일반적 의무)', lawShort: '산안법 제5조',
     summary: '사업주는 근로자의 안전과 건강을 유지·증진시킬 의무가 있습니다.',
-    guide: ['위험요인 확인 및 작업 중지 검토', '개선 조치 계획 수립', '조치 완료 후 관리감독자 확인']
+    penalty: '위반 내용에 따라 별도 판단',
+    laws: [
+      { law: '산업안전보건법', article: '제5조', duty: '사업주의 안전보건 확보 의무', penalty: '위반 내용에 따라 별도 판단' }
+    ],
+    guide: ['위험요인 확인 및 작업 중지 검토', '개선 조치 계획 수립', '조치 완료 후 관리감독자 확인'],
+    actions: {
+      immediate: ['위험요인 확인 및 작업 중지 검토'],
+      short: ['개선 조치 계획 수립'],
+      long: ['조치 완료 후 관리감독자 확인']
+    }
   }
 ];
 
@@ -143,6 +239,23 @@ function normalizeOptions(raw) {
     result[group] = [...new Set(list.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim()))]
       .slice(0, MAX_OPTIONS);
   }
+
+  const staff = Array.isArray(raw.staff) && raw.staff.length ? raw.staff : DEFAULT_STAFF;
+  result.staff = staff
+    .filter((m) => m && typeof m.name === 'string' && m.name.trim())
+    .map((m) => ({ dept: String(m.dept || '기타').trim().slice(0, 40), name: String(m.name).trim().slice(0, 40) }))
+    .slice(0, MAX_OPTIONS);
+
+  const sites = Array.isArray(raw.sites) && raw.sites.length ? raw.sites : DEFAULT_SITES;
+  result.sites = sites
+    .filter((v) => v && typeof v.factory === 'string' && v.factory.trim())
+    .map((v) => ({
+      factory: String(v.factory).trim().slice(0, 40),
+      building: String(v.building || '').trim().slice(0, 40),
+      area: String(v.area || '').trim().slice(0, 60)
+    }))
+    .slice(0, MAX_OPTIONS);
+
   const cats = Array.isArray(raw.categories) && raw.categories.length ? raw.categories : DEFAULT_CATEGORIES;
   result.categories = cats
     .filter((c) => c && typeof c.key === 'string' && typeof c.label === 'string')
@@ -152,10 +265,26 @@ function normalizeOptions(raw) {
       law: String(c.law || '').slice(0, 160),
       lawShort: String(c.lawShort || c.law || '').slice(0, 60),
       summary: String(c.summary || '').slice(0, 400),
-      guide: (Array.isArray(c.guide) ? c.guide : []).slice(0, 6).map((g) => String(g).slice(0, 160))
+      penalty: String(c.penalty || '').slice(0, 160),
+      laws: (Array.isArray(c.laws) ? c.laws : []).slice(0, 8).map((l) => ({
+        law: String(l.law || '').slice(0, 60),
+        article: String(l.article || '').slice(0, 40),
+        duty: String(l.duty || '').slice(0, 200),
+        penalty: String(l.penalty || '').slice(0, 160)
+      })),
+      guide: (Array.isArray(c.guide) ? c.guide : []).slice(0, 6).map((g) => String(g).slice(0, 160)),
+      actions: normalizeActions(c.actions)
     }))
     .slice(0, MAX_OPTIONS);
   return result;
+}
+
+/** 단계별 개선조치를 즉시/단기/중장기 세 갈래로 정리한다. */
+function normalizeActions(raw) {
+  const pick = (list) => (Array.isArray(list) ? list : []).slice(0, 8)
+    .map((v) => String(v).slice(0, 160)).filter(Boolean);
+  const value = raw || {};
+  return { immediate: pick(value.immediate), short: pick(value.short), long: pick(value.long) };
 }
 
 async function writeOptions(next) {
@@ -169,6 +298,13 @@ function shortenLaw(law) {
   const article = /제\s*\d+조(\s*의\s*\d+)?/.exec(law || '');
   if (article) return article[0].replace(/\s+/g, '');
   return String(law || '').slice(0, 20);
+}
+
+/** staff / sites 항목을 문자열 하나로 식별한다. */
+function itemKey(group, item) {
+  return group === 'staff'
+    ? item.dept + '|' + item.name
+    : item.factory + '|' + item.building + '|' + item.area;
 }
 
 function findCategory(key) {
@@ -212,6 +348,31 @@ async function handleOptions(req, res, urlPath) {
       return sendJSON(res, 201, { options });
     }
 
+    if (group === 'staff') {
+      const name = text(body.name, 40);
+      const dept = text(body.dept, 40) || '기타';
+      if (!name) return sendJSON(res, 400, { error: '이름을 입력해 주세요.' });
+      if (options.staff.some((m) => m.name === name && m.dept === dept)) {
+        return sendJSON(res, 409, { error: '이미 있는 담당자입니다.' });
+      }
+      options.staff.push({ dept, name });
+      await enqueue(() => writeOptions(options));
+      return sendJSON(res, 201, { options });
+    }
+
+    if (group === 'sites') {
+      const factory = text(body.factory, 40);
+      const building = text(body.building, 40);
+      const area = text(body.area, 60);
+      if (!factory) return sendJSON(res, 400, { error: '공장을 입력해 주세요.' });
+      if (options.sites.some((v) => v.factory === factory && v.building === building && v.area === area)) {
+        return sendJSON(res, 409, { error: '이미 있는 장소입니다.' });
+      }
+      options.sites.push({ factory, building, area });
+      await enqueue(() => writeOptions(options));
+      return sendJSON(res, 201, { options });
+    }
+
     if (group === 'categories') {
       const label = text(body.label, 40);
       const law = text(body.law, 160);
@@ -245,6 +406,12 @@ async function handleOptions(req, res, urlPath) {
       const before = options[group].length;
       options[group] = options[group].filter((v) => v !== value);
       if (options[group].length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
+    } else if (group === 'staff' || group === 'sites') {
+      const before = options[group].length;
+      // value 는 "부서|이름" 또는 "공장|동|구역" 형태의 합성 키
+      options[group] = options[group].filter((item) => itemKey(group, item) !== value);
+      if (options[group].length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
+      if (!options[group].length) return sendJSON(res, 400, { error: '최소 한 개는 남아 있어야 합니다.' });
     } else if (group === 'categories') {
       if (options.categories.length <= 1) {
         return sendJSON(res, 400, { error: '위험 유형은 최소 한 개는 남아 있어야 합니다.' });
@@ -394,6 +561,7 @@ function validateNew(body) {
     categoryLabel: category ? category.label : '',
     law: category ? category.law : '',
     lawShort: category ? category.lawShort : '',
+    penalty: category ? category.penalty : '',
     issue: text(body.issue, 2000),
     status: STATUSES.includes(body.status) ? body.status : '진행중',
     action: text(body.action, 300)
@@ -614,7 +782,7 @@ async function handleAPI(req, res, urlPath) {
 
     const id = randomUUID();
     const photo = await savePhoto(id, body.photo);
-    const saved = { id, ...rec, photo, createdAt: new Date().toISOString() };
+    const saved = { id, ...rec, photo, checks: {}, createdAt: new Date().toISOString() };
 
     await enqueue(async () => {
       const records = await readRecords();
@@ -634,6 +802,14 @@ async function handleAPI(req, res, urlPath) {
     const patch = {};
     if (STATUSES.includes(body.status)) patch.status = body.status;
     if (typeof body.action === 'string') patch.action = text(body.action, 300);
+    if (body.checks && typeof body.checks === 'object' && !Array.isArray(body.checks)) {
+      // { "immediate-0": true, ... } — 단계별 개선조치 완료 표시
+      const checks = {};
+      for (const [key, value] of Object.entries(body.checks).slice(0, 40)) {
+        if (/^(immediate|short|long)-\d{1,2}$/.test(key)) checks[key] = Boolean(value);
+      }
+      patch.checks = checks;
+    }
     if (!Object.keys(patch).length) {
       return sendJSON(res, 400, { error: '변경할 항목이 없습니다.' });
     }

@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="삼우기업주식회사 안전보건 순회점검 현장등록 시스템. 현장에서 점검 내용을 즉시 등록하고 관련 법조항과 개선 조치를 확인합니다.">
+<meta name="description" content="삼우기업주식회사 안전보건 순회점검 보고서. 현장에서 점검 내용을 등록하고 관련 법조항·처벌 규정과 단계별 개선조치를 관리합니다.">
 <meta name="theme-color" content="#003675">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>안전보건 순회점검 시스템</title>
+<title>안전보건 순회점검 보고서</title>
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -21,7 +21,7 @@
         <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
       </svg>
     </span>
-    <h1 class="login__title">안전보건 순회점검 시스템</h1>
+    <h1 class="login__title">안전보건 순회점검 보고서</h1>
     <p class="login__desc">접속 비밀번호를 입력해 주세요. 한 번 입력하면 이 기기에서는 다시 묻지 않습니다.</p>
     <div class="field">
       <label for="loginPassword">접속 비밀번호</label>
@@ -49,8 +49,8 @@
         </svg>
       </span>
       <span class="brand__text">
-        <strong class="brand__title">안전보건 순회점검 시스템</strong>
-        <span class="brand__sub">Safety Inspection Management</span>
+        <strong class="brand__title">안전보건 순회점검 보고서</strong>
+        <span class="brand__sub">Safety Inspection Report</span>
       </span>
     </div>
     <p class="site-header__note">산업안전보건법에 따른 사업장 순회점검 결과를 현장에서 등록·관리합니다.</p>
@@ -59,6 +59,24 @@
     </p>
   </div>
 </header>
+
+<div class="approval" aria-hidden="true">
+  <table class="approval__table">
+    <tbody>
+      <tr>
+        <th rowspan="2" class="approval__label">결<br>재</th>
+        <th>관리감독자</th>
+        <th>안전담당자</th>
+        <th>관리책임자</th>
+      </tr>
+      <tr>
+        <td class="approval__sign"></td>
+        <td class="approval__sign"></td>
+        <td class="approval__sign"></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
 <main id="main" class="wrap layout">
 
@@ -76,22 +94,84 @@
           <input type="date" id="inspectDate" name="inspectDate" required>
         </div>
         <div class="field">
-          <label for="inspector">점검 담당자 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="inspector" name="inspector" list="inspectorList" placeholder="선택하거나 입력" autocomplete="off" required>
-          <datalist id="inspectorList"></datalist>
+          <span class="field__label label-row">
+            <label for="inspector">점검 담당자 <span class="req" aria-hidden="true">*</span></label>
+            <button type="button" class="link-btn" id="addStaffBtn">＋ 인원</button>
+          </span>
+          <div class="select-wrap">
+            <select id="inspector" name="inspector" required></select>
+          </div>
         </div>
       </div>
 
-      <div class="field-row">
-        <div class="field">
-          <label for="attendees">입회자 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="attendees" name="attendees" list="attendeeList" placeholder="선택하거나 입력" autocomplete="off" required>
-          <datalist id="attendeeList"></datalist>
+      <div class="field">
+        <label for="attendees">입회자 <span class="req" aria-hidden="true">*</span></label>
+        <div class="select-wrap">
+          <select id="attendees" name="attendees" required></select>
         </div>
-        <div class="field">
-          <label for="location">점검 장소 <span class="req" aria-hidden="true">*</span></label>
-          <input type="text" id="location" name="location" list="locationList" placeholder="선택하거나 입력" autocomplete="off" required>
-          <datalist id="locationList"></datalist>
+      </div>
+
+      <div class="subform" id="staffForm" hidden>
+        <p class="subform__title">담당자 명단에 추가</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="newStaffDept">부서명</label>
+            <input type="text" id="newStaffDept" placeholder="예) 생산관리팀" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="newStaffName">이름 <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="newStaffName" placeholder="예) 홍길동" autocomplete="off">
+          </div>
+        </div>
+        <p class="form__error" id="staffError" role="alert" hidden></p>
+        <div class="btn-row">
+          <button type="button" class="btn btn--primary btn--sm" id="saveStaffBtn">인원 저장</button>
+          <button type="button" class="btn btn--line btn--sm" id="cancelStaffBtn">취소</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field__label label-row">
+          <span>점검 장소 <span class="req" aria-hidden="true">*</span></span>
+          <button type="button" class="link-btn" id="addSiteBtn">＋ 장소 추가</button>
+        </span>
+        <div class="site-row">
+          <div class="select-wrap">
+            <label class="sr-only" for="siteFactory">공장</label>
+            <select id="siteFactory"></select>
+          </div>
+          <div class="select-wrap">
+            <label class="sr-only" for="siteBuilding">동</label>
+            <select id="siteBuilding"></select>
+          </div>
+          <div class="select-wrap">
+            <label class="sr-only" for="siteArea">세부 구역</label>
+            <select id="siteArea"></select>
+          </div>
+        </div>
+        <input type="hidden" id="location" name="location">
+
+        <div class="subform" id="siteForm" hidden>
+          <p class="subform__title">새 점검 장소 추가</p>
+          <div class="field-row">
+            <div class="field">
+              <label for="newSiteFactory">공장 <span class="req" aria-hidden="true">*</span></label>
+              <input type="text" id="newSiteFactory" placeholder="예) 4공장" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="newSiteBuilding">동</label>
+              <input type="text" id="newSiteBuilding" placeholder="예) A동" autocomplete="off">
+            </div>
+          </div>
+          <div class="field">
+            <label for="newSiteArea">세부 구역</label>
+            <input type="text" id="newSiteArea" placeholder="예) 성형반" autocomplete="off">
+          </div>
+          <p class="form__error" id="siteError" role="alert" hidden></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn--primary btn--sm" id="saveSiteBtn">장소 저장</button>
+            <button type="button" class="btn btn--line btn--sm" id="cancelSiteBtn">취소</button>
+          </div>
         </div>
       </div>
 
@@ -189,7 +269,10 @@
     <section class="panel" aria-labelledby="h-result">
       <div class="panel__head">
         <h2 class="panel__title" id="h-result">점검 결과 분석</h2>
-        <button type="button" class="btn btn--line btn--sm" id="printResult">인쇄</button>
+        <span class="head-actions">
+          <button type="button" class="btn btn--primary btn--sm" id="mailBtn" disabled>메일송부</button>
+          <button type="button" class="btn btn--line btn--sm" id="printResult">인쇄</button>
+        </span>
       </div>
       <div class="panel__body" id="resultArea" aria-live="polite">
         <p class="empty">점검 내용을 등록하면 관련 법조항과 개선 조치 가이드가 표시됩니다.</p>
@@ -229,6 +312,7 @@
                   <th scope="col">담당 / 입회</th>
                   <th scope="col">위험유형</th>
                   <th scope="col">관련 법조항</th>
+                  <th scope="col">위반 시 처벌</th>
                   <th scope="col">조치상태</th>
                   <th scope="col">조치내용</th>
                   <th scope="col" class="col-manage">관리</th>
@@ -258,6 +342,7 @@
                   <th scope="col">담당 / 입회</th>
                   <th scope="col">위험유형</th>
                   <th scope="col">관련 법조항</th>
+                  <th scope="col">위반 시 처벌</th>
                   <th scope="col">조치상태</th>
                   <th scope="col">조치내용</th>
                   <th scope="col" class="col-manage">관리</th>
