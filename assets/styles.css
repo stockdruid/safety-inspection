@@ -790,6 +790,21 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
 }
 
 
+/* 관련 법조항 찾기 버튼 — 지적사항 아래 전체 폭 */
+.btn--find {
+  width: 100%;
+  margin-top: 2px;
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+  background: var(--c-primary-050);
+  font-weight: 700;
+}
+.btn--find:hover {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
 /* --------------------------------------------- 지적사항 조항 매칭 결과 */
 .rule-result {
   display: grid; gap: 7px;
@@ -857,7 +872,7 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
   .tabs, .filter-row, .scroll-hint, .manage, .notice,
   .btn, .btn-del, .col-manage, .data-table td.col-manage,
   .panel__hint, .head-actions, .site-header__note,
-  .rule-result, .help { display: none !important; }
+  .rule-result, .help, .btn--find { display: none !important; }
 
   /* 결재란: 인쇄물 우측 상단 */
   .approval { display: block; margin: 0 0 4mm; }

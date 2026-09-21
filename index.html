@@ -211,12 +211,15 @@
       </div>
 
       <div class="field">
-        <span class="field__label label-row">
-          <label for="issue">현장 지적사항 <span class="req" aria-hidden="true">*</span></label>
-          <button type="button" class="link-btn" id="findLawBtn">조항 찾기</button>
-        </span>
+        <label for="issue">현장 지적사항 <span class="req" aria-hidden="true">*</span></label>
         <textarea id="issue" name="issue" rows="4" placeholder="예) 프레스 광전자식 방호장치가 해제된 상태로 작업 중" required></textarea>
-        <p class="help">내용을 적고 <b>조항 찾기</b>를 누르면 문장에 맞는 법조항 후보를 찾아 줍니다.</p>
+        <button type="button" class="btn btn--line btn--find" id="findLawBtn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+          </svg>
+          관련 법조항 찾기
+        </button>
+        <p class="help">지적사항을 적으면 문장에 맞는 법조항 후보를 자동으로 찾아 줍니다.</p>
         <div class="rule-result" id="ruleResult" hidden></div>
       </div>
 

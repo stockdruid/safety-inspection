@@ -652,6 +652,33 @@
     renderRuleCandidates(matchRules(issue));
   });
 
+  /* 타이핑을 멈추면 버튼을 누르지 않아도 후보를 찾아 준다. (키워드 비교라 즉시 끝난다) */
+  var autoFindTimer = null;
+  els.issue.addEventListener('input', function () {
+    window.clearTimeout(autoFindTimer);
+    autoFindTimer = window.setTimeout(function () {
+      var issue = els.issue.value.trim();
+      if (issue.length < 4) {
+        els.ruleResult.hidden = true;
+        return;
+      }
+      var matches = matchRules(issue);
+      if (!matches.length) {
+        els.ruleResult.hidden = true;   // 자동 탐색에서는 "못 찾았다"를 굳이 띄우지 않는다
+        return;
+      }
+      // 이미 고른 조항이 후보에 그대로 있으면 선택을 유지한다.
+      var keepPicked = pickedRule && matches.some(function (m) { return m.rule.id === pickedRule.id; });
+      renderRuleCandidates(matches);
+      if (keepPicked) {
+        var card = els.ruleResult.querySelector('[data-rule="' + pickedRule.id + '"]');
+        if (card) card.classList.add('is-picked');
+      } else {
+        pickedRule = null;
+      }
+    }, 450);
+  });
+
   els.ruleResult.addEventListener('click', function (e) {
     var card = e.target.closest && e.target.closest('[data-rule]');
     if (!card) return;
