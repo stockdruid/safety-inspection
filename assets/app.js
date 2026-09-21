@@ -97,6 +97,7 @@
       locations: [],
       staff: DEFAULT_STAFF.slice(),
       sites: DEFAULT_SITES.slice(),
+      rules: [],
       categories: Object.keys(RISK_DB).map(function (key) {
         return {
           key: key,
@@ -166,6 +167,8 @@
     saveSiteBtn: $('saveSiteBtn'),
     cancelSiteBtn: $('cancelSiteBtn'),
     mailBtn: $('mailBtn'),
+    findLawBtn: $('findLawBtn'),
+    ruleResult: $('ruleResult'),
     addCategoryBtn: $('addCategoryBtn'),
     categoryForm: $('categoryForm'),
     newCatLabel: $('newCatLabel'),
@@ -344,7 +347,17 @@
         return data.record;
       });
     }
-    var local = Object.assign({ id: makeId(), createdAt: new Date().toISOString() }, rec);
+    var rule = null;
+    for (var i = 0; i < store.options.rules.length; i++) {
+      if (store.options.rules[i].id === rec.ruleId) { rule = store.options.rules[i]; break; }
+    }
+    var snapshot = rule
+      ? {
+          ruleTitle: rule.title, law: rule.law, lawShort: rule.lawShort,
+          summary: rule.summary, penalty: rule.penalty, laws: rule.laws, actions: rule.actions
+        }
+      : {};
+    var local = Object.assign({ id: makeId(), createdAt: new Date().toISOString() }, rec, snapshot);
     store.records.push(local);
     if (!writeLocal()) {
       store.records.pop();
@@ -403,6 +416,7 @@
         locations: Array.isArray(parsed.locations) ? parsed.locations : base.locations,
         staff: Array.isArray(parsed.staff) && parsed.staff.length ? parsed.staff : base.staff,
         sites: Array.isArray(parsed.sites) && parsed.sites.length ? parsed.sites : base.sites,
+        rules: Array.isArray(parsed.rules) ? parsed.rules : base.rules,
         categories: Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : base.categories
       };
     } catch (err) {
@@ -423,7 +437,18 @@
     if (store.mode !== 'server') {
       store.options = readLocalOptions();
       store.features = { analyze: false };
-      return Promise.resolve();
+      // 서버가 없을 때도 지적사항 매칭이 되도록 규칙 파일을 직접 읽는다.
+      if (store.options.rules && store.options.rules.length) return Promise.resolve();
+      return fetch(new URL('assets/rules.json', document.baseURI).href)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          store.options.rules = Array.isArray(data.rules) ? data.rules : [];
+          writeLocalOptions();
+        })
+        .catch(function (err) {
+          console.info('규칙 파일을 불러오지 못했습니다.', err.message);
+          store.options.rules = [];
+        });
     }
     return request(OPTIONS_URL).then(function (data) {
       if (data.options) store.options = data.options;
@@ -546,8 +571,150 @@
     return Promise.resolve();
   };
 
+  /* ------------------------------------------------- 지적사항 → 조항 매칭 */
+  var pickedRule = null;   // 사용자가 고른 규칙 (등록 시 기록에 저장된다)
+
+  /** 비교를 위해 공백·기호를 지우고 소문자로 맞춘다. */
+  function normalizeText(text) {
+    return String(text || '').toLowerCase().replace(/[\s.,·・\-()\[\]]/g, '');
+  }
+
+  /**
+   * 지적사항 문장에서 규칙 키워드를 찾아 점수를 매긴다.
+   * 긴 키워드일수록 더 구체적이므로 가중치를 높게 준다.
+   */
+  function matchRules(issue) {
+    var haystack = normalizeText(issue);
+    if (!haystack) return [];
+
+    return store.options.rules.map(function (rule) {
+      var hits = [];
+      var score = 0;
+      (rule.keywords || []).forEach(function (keyword) {
+        var needle = normalizeText(keyword);
+        if (needle && haystack.indexOf(needle) !== -1) {
+          hits.push(keyword);
+          score += needle.length;
+        }
+      });
+      return { rule: rule, score: score, hits: hits };
+    })
+    .filter(function (m) { return m.score > 0; })
+    .sort(function (a, b) { return b.score - a.score; })
+    .slice(0, 4);
+  }
+
+  function categoryLabelOf(key) {
+    for (var i = 0; i < store.options.categories.length; i++) {
+      if (store.options.categories[i].key === key) return store.options.categories[i].label;
+    }
+    return '기타';
+  }
+
+  function renderRuleCandidates(matches) {
+    if (!matches.length) {
+      els.ruleResult.innerHTML =
+        '<p class="rule-empty">문장에서 아는 단어를 찾지 못했습니다. ' +
+        '위험 유형을 직접 고르면 해당 유형의 기본 조항이 적용됩니다.</p>';
+      els.ruleResult.hidden = false;
+      return;
+    }
+
+    els.ruleResult.innerHTML =
+      '<p class="rule-head">지적사항에서 찾은 조항 ' + matches.length + '건 — 맞는 것을 고르세요</p>' +
+      matches.map(function (m, i) {
+        var rule = m.rule;
+        return '<button type="button" class="rule-card' + (i === 0 ? ' is-top' : '') + '" data-rule="' +
+            escapeHTML(rule.id) + '">' +
+          '<span class="rule-card__top">' +
+            '<span class="rule-card__title">' + escapeHTML(rule.title) + '</span>' +
+            '<span class="rule-card__cat">' + escapeHTML(categoryLabelOf(rule.category)) + '</span>' +
+          '</span>' +
+          '<span class="rule-card__law">' + escapeHTML(rule.law) + '</span>' +
+          (rule.penalty ? '<span class="rule-card__penalty">' + escapeHTML(rule.penalty) + '</span>' : '') +
+          '<span class="rule-card__hits">찾은 단어: ' + escapeHTML(m.hits.join(', ')) + '</span>' +
+        '</button>';
+      }).join('') +
+      '<p class="rule-note">조항은 참고용입니다. 최종 확인은 ' +
+      '<a href="https://www.law.go.kr/main.html" target="_blank" rel="noopener">국가법령정보센터</a>에서 하세요.</p>';
+    els.ruleResult.hidden = false;
+  }
+
+  els.findLawBtn.addEventListener('click', function () {
+    var issue = els.issue.value.trim();
+    if (!issue) {
+      els.ruleResult.innerHTML = '<p class="rule-empty">먼저 현장 지적사항을 입력해 주세요.</p>';
+      els.ruleResult.hidden = false;
+      els.issue.focus();
+      return;
+    }
+    pickedRule = null;
+    renderRuleCandidates(matchRules(issue));
+  });
+
+  els.ruleResult.addEventListener('click', function (e) {
+    var card = e.target.closest && e.target.closest('[data-rule]');
+    if (!card) return;
+
+    var id = card.getAttribute('data-rule');
+    pickedRule = null;
+    for (var i = 0; i < store.options.rules.length; i++) {
+      if (store.options.rules[i].id === id) { pickedRule = store.options.rules[i]; break; }
+    }
+    if (!pickedRule) return;
+
+    // 고른 조항에 맞춰 위험 유형도 같이 맞춰 준다.
+    if (store.options.categories.some(function (c) { return c.key === pickedRule.category; })) {
+      els.category.value = pickedRule.category;
+    }
+
+    Array.prototype.forEach.call(els.ruleResult.querySelectorAll('[data-rule]'), function (el) {
+      el.classList.toggle('is-picked', el === card);
+    });
+    renderResult(previewRecord());
+  });
+
+  /** 아직 등록 전 상태를 결과 화면에 미리 보여 주기 위한 임시 기록 */
+  function previewRecord() {
+    return {
+      id: '',
+      date: els.date.value,
+      inspector: els.inspector.value,
+      attendees: els.attendees.value,
+      location: els.location.value,
+      category: els.category.value,
+      issue: els.issue.value.trim(),
+      ruleId: pickedRule ? pickedRule.id : '',
+      ruleTitle: pickedRule ? pickedRule.title : '',
+      law: pickedRule ? pickedRule.law : '',
+      lawShort: pickedRule ? pickedRule.lawShort : '',
+      penalty: pickedRule ? pickedRule.penalty : '',
+      summary: pickedRule ? pickedRule.summary : '',
+      laws: pickedRule ? pickedRule.laws : null,
+      actions: pickedRule ? pickedRule.actions : null,
+      status: '진행중',
+      action: '',
+      photo: pendingPhoto,
+      checks: {}
+    };
+  }
+
   /** 위험 유형 정보를 찾는다. 삭제된 유형이면 기록에 남은 스냅샷으로 대체한다. */
   function categoryInfo(rec) {
+    // 지적사항으로 고른 조항이 있으면 그 내용을 그대로 쓴다.
+    if (rec.law || (rec.laws && rec.laws.length)) {
+      return {
+        label: rec.ruleTitle || rec.categoryLabel || categoryLabelOf(rec.category),
+        law: rec.law || '',
+        lawShort: rec.lawShort || '',
+        summary: rec.summary || '',
+        penalty: rec.penalty || '',
+        laws: rec.laws || [],
+        actions: rec.actions || { immediate: [], short: [], long: [] },
+        guide: []
+      };
+    }
+
     var found = null;
     for (var i = 0; i < store.options.categories.length; i++) {
       if (store.options.categories[i].key === rec.category) { found = store.options.categories[i]; break; }
@@ -1291,6 +1458,7 @@
       location: els.location.value.trim(),
       category: els.category.value,
       issue: els.issue.value.trim(),
+      ruleId: pickedRule ? pickedRule.id : '',
       status: '진행중',
       action: '',
       photo: pendingPhoto
@@ -1318,6 +1486,8 @@
         els.completeCheck.checked = false;
         setPreview('');
         els.analyzeNotice.hidden = true;
+        els.ruleResult.hidden = true;
+        pickedRule = null;
         els.resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
       .catch(reportError)

@@ -21,6 +21,7 @@ const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
 const ACCESS_FILE = path.join(DATA_DIR, 'access.json');
 const OPTIONS_FILE = path.join(DATA_DIR, 'options.json');
+const RULES_SEED_FILE = path.join(ROOT, 'assets', 'rules.json');
 
 const PORT = Number(process.env.PORT) || 5180;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -170,7 +171,20 @@ const DEFAULT_CATEGORIES = [
   }
 ];
 
-let options = null; // { inspectors, attendees, locations, categories }
+let options = null; // { inspectors, attendees, locations, staff, sites, categories, rules }
+
+/** assets/rules.json 을 읽어 기본 규칙으로 쓴다. 파일이 없으면 규칙 기능만 비활성화된다. */
+let defaultRules = [];
+
+async function loadDefaultRules() {
+  try {
+    const parsed = JSON.parse(await readFile(RULES_SEED_FILE, 'utf8'));
+    defaultRules = Array.isArray(parsed.rules) ? parsed.rules : [];
+  } catch (err) {
+    console.warn('규칙 파일을 읽지 못했습니다. 지적사항 자동 매칭이 비활성화됩니다:', err.message);
+    defaultRules = [];
+  }
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -256,6 +270,12 @@ function normalizeOptions(raw) {
     }))
     .slice(0, MAX_OPTIONS);
 
+  const rules = Array.isArray(raw.rules) && raw.rules.length ? raw.rules : defaultRules;
+  result.rules = rules
+    .filter((r) => r && typeof r.id === 'string' && typeof r.title === 'string')
+    .map(normalizeRule)
+    .slice(0, MAX_OPTIONS);
+
   const cats = Array.isArray(raw.categories) && raw.categories.length ? raw.categories : DEFAULT_CATEGORIES;
   result.categories = cats
     .filter((c) => c && typeof c.key === 'string' && typeof c.label === 'string')
@@ -277,6 +297,28 @@ function normalizeOptions(raw) {
     }))
     .slice(0, MAX_OPTIONS);
   return result;
+}
+
+/** 지적사항 매칭 규칙 하나를 안전한 형태로 정리한다. */
+function normalizeRule(raw) {
+  return {
+    id: String(raw.id).slice(0, 60),
+    category: String(raw.category || 'etc').slice(0, 40),
+    title: String(raw.title).slice(0, 80),
+    keywords: (Array.isArray(raw.keywords) ? raw.keywords : []).slice(0, 30)
+      .map((k) => String(k).trim().slice(0, 40)).filter(Boolean),
+    law: String(raw.law || '').slice(0, 200),
+    lawShort: String(raw.lawShort || '').slice(0, 60),
+    summary: String(raw.summary || '').slice(0, 400),
+    penalty: String(raw.penalty || '').slice(0, 160),
+    laws: (Array.isArray(raw.laws) ? raw.laws : []).slice(0, 8).map((l) => ({
+      law: String(l.law || '').slice(0, 60),
+      article: String(l.article || '').slice(0, 40),
+      duty: String(l.duty || '').slice(0, 200),
+      penalty: String(l.penalty || '').slice(0, 160)
+    })),
+    actions: normalizeActions(raw.actions)
+  };
 }
 
 /** 단계별 개선조치를 즉시/단기/중장기 세 갈래로 정리한다. */
@@ -373,6 +415,30 @@ async function handleOptions(req, res, urlPath) {
       return sendJSON(res, 201, { options });
     }
 
+    if (group === 'rules') {
+      const title = text(body.title, 80);
+      const keywords = (Array.isArray(body.keywords) ? body.keywords : [])
+        .map((k) => text(k, 40)).filter(Boolean);
+      if (!title) return sendJSON(res, 400, { error: '규칙 이름을 입력해 주세요.' });
+      if (!keywords.length) return sendJSON(res, 400, { error: '찾을 단어를 한 개 이상 입력해 주세요.' });
+
+      const rule = normalizeRule({
+        id: 'r-' + randomUUID().slice(0, 8),
+        category: findCategory(body.category) ? body.category : 'etc',
+        title,
+        keywords,
+        law: body.law,
+        lawShort: body.lawShort || shortenLaw(body.law),
+        summary: body.summary,
+        penalty: body.penalty,
+        laws: body.laws,
+        actions: body.actions
+      });
+      options.rules.push(rule);
+      await enqueue(() => writeOptions(options));
+      return sendJSON(res, 201, { options, rule });
+    }
+
     if (group === 'categories') {
       const label = text(body.label, 40);
       const law = text(body.law, 160);
@@ -406,6 +472,10 @@ async function handleOptions(req, res, urlPath) {
       const before = options[group].length;
       options[group] = options[group].filter((v) => v !== value);
       if (options[group].length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
+    } else if (group === 'rules') {
+      const before = options.rules.length;
+      options.rules = options.rules.filter((r) => r.id !== value);
+      if (options.rules.length === before) return sendJSON(res, 404, { error: '항목을 찾을 수 없습니다.' });
     } else if (group === 'staff' || group === 'sites') {
       const before = options[group].length;
       // value 는 "부서|이름" 또는 "공장|동|구역" 형태의 합성 키
@@ -549,8 +619,13 @@ function isISODate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function findRule(id) {
+  return options.rules.find((r) => r.id === id) || null;
+}
+
 function validateNew(body) {
   const category = findCategory(body.category);
+  const rule = body.ruleId ? findRule(body.ruleId) : null;
   const rec = {
     date: isISODate(body.date) ? body.date : '',
     inspector: text(body.inspector, 50),
@@ -559,9 +634,15 @@ function validateNew(body) {
     category: category ? category.key : '',
     // 위험 유형은 나중에 지워질 수 있으므로 등록 시점의 내용을 기록에 함께 남긴다.
     categoryLabel: category ? category.label : '',
-    law: category ? category.law : '',
-    lawShort: category ? category.lawShort : '',
-    penalty: category ? category.penalty : '',
+    // 매칭된 규칙이 있으면 그 내용을, 없으면 위험 유형 기본값을 기록에 남긴다.
+    ruleId: rule ? rule.id : '',
+    ruleTitle: rule ? rule.title : '',
+    law: rule ? rule.law : (category ? category.law : ''),
+    lawShort: rule ? rule.lawShort : (category ? category.lawShort : ''),
+    penalty: rule ? rule.penalty : (category ? category.penalty : ''),
+    summary: rule ? rule.summary : (category ? category.summary : ''),
+    laws: rule ? rule.laws : (category ? category.laws : []),
+    actions: rule ? rule.actions : (category ? category.actions : { immediate: [], short: [], long: [] }),
     issue: text(body.issue, 2000),
     status: STATUSES.includes(body.status) ? body.status : '진행중',
     action: text(body.action, 300)
@@ -898,6 +979,7 @@ server.on('error', (err) => {
 await ensureDirs();
 access = await loadAccess();
 sessionToken = deriveToken(access);
+await loadDefaultRules();
 options = await readOptions();
 await initAnalyze();
 

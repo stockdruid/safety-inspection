@@ -789,6 +789,56 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
   .stage__item input[type="checkbox"] { width: 20px; height: 20px; }
 }
 
+
+/* --------------------------------------------- 지적사항 조항 매칭 결과 */
+.rule-result {
+  display: grid; gap: 7px;
+  margin-top: 8px; padding: 12px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-line);
+  border-left: 3px solid var(--c-primary);
+  border-radius: var(--r-sm);
+}
+.rule-head { font-size: 12.5px; font-weight: 700; color: var(--c-navy); }
+.rule-empty { font-size: 12.5px; color: var(--c-text-sub); }
+.rule-note { font-size: 11.5px; color: var(--c-text-sub); }
+.rule-note a { color: var(--c-primary); }
+
+.rule-card {
+  display: grid; gap: 3px;
+  width: 100%; padding: 10px;
+  font-family: inherit; text-align: left;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color .12s, background-color .12s;
+}
+.rule-card:hover { border-color: var(--c-primary); background: var(--c-primary-050); }
+.rule-card.is-top { border-color: var(--c-primary); }
+.rule-card.is-picked {
+  border-color: var(--c-success); background: var(--c-success-bg);
+  box-shadow: inset 3px 0 0 var(--c-success);
+}
+
+.rule-card__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rule-card__title { font-size: 13.5px; font-weight: 700; color: var(--c-text); }
+.rule-card__cat {
+  flex: none; padding: 1px 6px;
+  font-size: 11px; font-weight: 600;
+  color: var(--c-text-sub); background: var(--c-surface-alt);
+  border: 1px solid var(--c-line); border-radius: 100px;
+}
+.rule-card__law { font-size: 12.5px; color: var(--c-primary); font-weight: 600; }
+.rule-card__penalty { font-size: 12px; color: var(--c-danger); font-weight: 600; }
+.rule-card__hits { font-size: 11.5px; color: var(--c-text-mute); }
+
+@media (max-width: 767px) {
+  .rule-card { padding: 12px; }
+  .rule-card__title { font-size: 14px; }
+  .rule-card__top { flex-wrap: wrap; }
+}
+
 /* ------------------------------------------------------------------ 인쇄 */
 @media print {
   /* A4 세로, 여백을 좁혀 내용이 한 장에 들어가도록 한다 */
@@ -806,7 +856,8 @@ select[aria-invalid="true"] { border-color: var(--c-danger); }
   .gov-bar, .site-footer, .skip-link, .conn, .login,
   .tabs, .filter-row, .scroll-hint, .manage, .notice,
   .btn, .btn-del, .col-manage, .data-table td.col-manage,
-  .panel__hint, .head-actions, .site-header__note { display: none !important; }
+  .panel__hint, .head-actions, .site-header__note,
+  .rule-result, .help { display: none !important; }
 
   /* 결재란: 인쇄물 우측 상단 */
   .approval { display: block; margin: 0 0 4mm; }
